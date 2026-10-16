@@ -30,6 +30,8 @@ using SkiaSharp;
 using System.Runtime.InteropServices;
 using DrawingRectangle = System.Drawing.Rectangle;
 
+using ShareX.Linux.Capture;
+
 namespace ShareX.Tools.Ruler;
 
 internal sealed class ScreenPixelBuffer
@@ -51,7 +53,10 @@ internal sealed class ScreenPixelBuffer
             throw new ArgumentOutOfRangeException(nameof(bounds));
         }
 
-        using SKBitmap bitmap = WindowsImageInterop.Capture(new DrawingRectangle(bounds.X, bounds.Y, bounds.Width, bounds.Height));
+        using SKBitmap bitmap = WaylandScreenCapture.CaptureRectangle(
+            new DrawingRectangle(bounds.X, bounds.Y, bounds.Width, bounds.Height))
+            ?? throw new InvalidOperationException("The screenshot portal returned no image for the ruler.");
+
         int[] pixels = new int[bitmap.Width * bitmap.Height];
         for (int y = 0; y < bitmap.Height; y++)
             Marshal.Copy(IntPtr.Add(bitmap.GetPixels(), y * bitmap.RowBytes), pixels, y * bitmap.Width, bitmap.Width);

@@ -27,7 +27,6 @@ using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SkiaSharp;
 using System.Diagnostics;
-using Vortice.DXGI;
 
 namespace ShareX.Tools;
 
@@ -77,7 +76,6 @@ public sealed class BackgroundRemovalService : IDisposable
 {
     private static readonly float[] Mean = [0.485f, 0.456f, 0.406f];
     private static readonly float[] StandardDeviation = [0.229f, 0.224f, 0.225f];
-    private static readonly Lazy<DirectMLAdapter> PreferredDirectMLAdapter = new(FindPreferredDirectMLAdapter);
     private readonly Lock _sessionLock = new();
     private SessionCacheKey? _sessionKey;
     private InferenceSession? _session;
@@ -137,12 +135,12 @@ public sealed class BackgroundRemovalService : IDisposable
 
         if (device == BackgroundRemovalDevice.GPU)
         {
-            return CreateDirectMLSession(modelPath);
+            return CreateAcceleratedSession(modelPath);
         }
 
         try
         {
-            return CreateDirectMLSession(modelPath);
+            return CreateAcceleratedSession(modelPath);
         }
         catch (Exception ex) when (ex is OnnxRuntimeException or DllNotFoundException or EntryPointNotFoundException or NotSupportedException)
         {
@@ -150,18 +148,40 @@ public sealed class BackgroundRemovalService : IDisposable
         }
     }
 
-    private static SessionCreationResult CreateDirectMLSession(string modelPath)
+    /// <summary>
+    /// Builds a session on a hardware execution provider.
+    /// </summary>
+    /// <remarks>
+    /// The default ONNX Runtime build only carries the CPU provider, so CUDA and ROCm are
+    /// available when the user has installed the matching runtime package. Each is tried in
+    /// turn, and the caller falls back to the CPU when none of them load.
+    /// </remarks>
+    private static SessionCreationResult CreateAcceleratedSession(string modelPath)
     {
-        DirectMLAdapter adapter = PreferredDirectMLAdapter.Value;
-        using SessionOptions sessionOptions = new()
-        {
-            EnableMemoryPattern = false,
-            ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL
-        };
+        string[] providers = ["CUDA", "ROCm"];
+        Exception? lastFailure = null;
 
-        sessionOptions.AppendExecutionProvider_DML(adapter.DeviceId);
-        return new SessionCreationResult(new InferenceSession(modelPath, sessionOptions), adapter.Name);
+        foreach (string provider in providers)
+        {
+            try
+            {
+                using SessionOptions sessionOptions = new()
+                {
+                    EnableMemoryPattern = false,
+                    ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
+                    GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL
+                };
+
+                sessionOptions.AppendExecutionProvider(provider);
+                return new SessionCreationResult(new InferenceSession(modelPath, sessionOptions), provider);
+            }
+            catch (Exception exception)
+            {
+                lastFailure = exception;
+            }
+        }
+
+        throw lastFailure ?? new NotSupportedException("No hardware execution provider is available.");
     }
 
     private static BackgroundRemovalResult RunModel(SKBitmap source, SessionLookupResult sessionResult, long sessionSetupMilliseconds)
@@ -208,46 +228,6 @@ public sealed class BackgroundRemovalService : IDisposable
             phaseStopwatch.ElapsedMilliseconds);
     }
 
-    private static DirectMLAdapter FindPreferredDirectMLAdapter()
-    {
-        try
-        {
-            using IDXGIFactory1 factory = Vortice.DXGI.DXGI.CreateDXGIFactory1<IDXGIFactory1>();
-            DirectMLAdapter? preferredAdapter = null;
-            ulong largestDedicatedMemory = 0;
-
-            for (uint index = 0; ; index++)
-            {
-                if (factory.EnumAdapters1(index, out IDXGIAdapter1 adapter).Failure)
-                {
-                    break;
-                }
-
-                using (adapter)
-                {
-                    AdapterDescription1 description = adapter.Description1;
-                    if ((description.Flags & AdapterFlags.Software) != 0)
-                    {
-                        continue;
-                    }
-
-                    ulong dedicatedMemory = description.DedicatedVideoMemory;
-                    if (preferredAdapter == null || dedicatedMemory > largestDedicatedMemory)
-                    {
-                        preferredAdapter = new DirectMLAdapter((int)index, description.Description);
-                        largestDedicatedMemory = dedicatedMemory;
-                    }
-                }
-            }
-
-            return preferredAdapter ?? new DirectMLAdapter(0, "GPU 0");
-        }
-        catch
-        {
-            return new DirectMLAdapter(0, "GPU 0");
-        }
-    }
-
     public void Dispose()
     {
         lock (_sessionLock)
@@ -268,8 +248,6 @@ public sealed class BackgroundRemovalService : IDisposable
     private readonly record struct SessionLookupResult(InferenceSession Session, bool IsCached, string ExecutionDevice);
 
     private readonly record struct SessionCreationResult(InferenceSession Session, string ExecutionDevice);
-
-    private readonly record struct DirectMLAdapter(int DeviceId, string Name);
 
     private readonly record struct SessionCacheKey(
         string ModelPath,

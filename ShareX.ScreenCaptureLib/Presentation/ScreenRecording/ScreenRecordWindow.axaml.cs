@@ -692,12 +692,9 @@ public partial class ScreenRecordWindow : Window, IDisposable
             return;
         }
 
-        WindowInfo info = new(handle);
-        info.ExStyle |= WindowStyles.WS_EX_TOOLWINDOW;
-        if (ExcludeFromCapture && !NativeMethods.SetWindowDisplayAffinity(handle, 0x11)) // WDA_EXCLUDEFROMCAPTURE
-        {
-            DebugHelper.WriteLine("Could not exclude the recording controls from capture. Win32 error: {0}", Marshal.GetLastWin32Error());
-        }
+        // Wayland has no per-window "exclude from capture" flag, and a utility-window hint is
+        // the compositor's business. Keeping the controls out of the recording is handled by
+        // capturing a specific monitor or window through the portal instead.
     }
 
     private void ApplyNativeWindowRegion()

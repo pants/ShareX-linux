@@ -3987,11 +3987,11 @@ namespace ShareX.Tools.Localization {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Optical character recognition is only available with Windows version {0} or newer..
+        ///   Looks up a localized string similar to Optical character recognition needs Tesseract. Install the &quot;tesseract&quot; package and at least one language pack, then try again..
         /// </summary>
-        public static string OCRHelper_Requires_Windows_version {
+        public static string OCRHelper_Engine_missing {
             get {
-                return ResourceManager.GetString("OCRHelper_Requires_Windows_version", resourceCulture);
+                return ResourceManager.GetString("OCRHelper_Engine_missing", resourceCulture);
             }
         }
         

@@ -37,10 +37,18 @@ namespace ShareX.ScreenCaptureLib
         }
 
         public static FFmpegCaptureDevice None { get; } = new FFmpegCaptureDevice("", "None");
-        public static FFmpegCaptureDevice GDIGrab { get; } = new FFmpegCaptureDevice("gdigrab", "gdigrab (Graphics Device Interface)");
-        public static FFmpegCaptureDevice DDAGrab { get; } = new FFmpegCaptureDevice("ddagrab", "ddagrab (Desktop Duplication API)");
-        public static FFmpegCaptureDevice ScreenCaptureRecorder { get; } = new FFmpegCaptureDevice("screen-capture-recorder", "dshow (screen-capture-recorder)");
-        public static FFmpegCaptureDevice VirtualAudioCapturer { get; } = new FFmpegCaptureDevice("virtual-audio-capturer", "dshow (virtual-audio-capturer)");
+
+        /// <summary>
+        /// Screen capture through the ScreenCast portal. The compositor publishes the chosen
+        /// monitor or window as a PipeWire stream, which ShareX feeds to ffmpeg.
+        /// </summary>
+        public static FFmpegCaptureDevice PipeWire { get; } = new FFmpegCaptureDevice("pipewire", "Screen (PipeWire via xdg-desktop-portal)");
+
+        /// <summary>Records whatever is playing, by reading a PulseAudio monitor source.</summary>
+        public static FFmpegCaptureDevice DesktopAudio { get; } = new FFmpegCaptureDevice("@DEFAULT_MONITOR@", "Desktop audio (default output monitor)");
+
+        /// <summary>The session's default microphone.</summary>
+        public static FFmpegCaptureDevice DefaultMicrophone { get; } = new FFmpegCaptureDevice("@DEFAULT_SOURCE@", "Default microphone");
 
         public override string ToString()
         {

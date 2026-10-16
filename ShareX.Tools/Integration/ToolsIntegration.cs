@@ -31,9 +31,7 @@ namespace ShareX.Tools.Integration;
 
 public static class ToolsIntegration
 {
-    private static NetworkMonitorWindow? _networkMonitorWindow;
-
-    public static void ShowDirectoryIndexerWindow(IndexerSettings settings,
+        public static void ShowDirectoryIndexerWindow(IndexerSettings settings,
         Func<string, IndexerOutput, Task>? uploadRequested = null)
     {
         Show(() => new DirectoryIndexerWindow(settings, uploadRequested));
@@ -53,21 +51,7 @@ public static class ToolsIntegration
         Show(() => new BackgroundRemoverWindow(modelsFolder, options));
     }
 
-    public static void ShowBorderlessWindow(
-        BorderlessWindowSettings options,
-        Func<string, bool, bool> toggleWindow,
-        Action<BorderlessWindowSettings>? settingsChanged = null,
-        Action? playNotificationSound = null)
-    {
-        Show(() => new BorderlessWindowWindow(options, toggleWindow, settingsChanged, playNotificationSound));
-    }
-
-    public static void ShowClipboardViewerWindow()
-    {
-        Show(() => new ClipboardViewerWindow());
-    }
-
-    public static Task<ScreenColorPickerResult?> PickScreenColorAsync(ScreenColorPickerOptions options)
+            public static Task<ScreenColorPickerResult?> PickScreenColorAsync(ScreenColorPickerOptions options)
     {
         AvaloniaBootstrapper.EnsureInitialized();
         TaskCompletionSource<ScreenColorPickerResult?> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -104,38 +88,7 @@ public static class ToolsIntegration
         Show(() => new ImageComparerWindow());
     }
 
-    public static void ShowInspectWindowWindow()
-    {
-        Show(() => new InspectWindowWindow());
-    }
-
-    public static void ShowMonitorTestWindow()
-    {
-        Show(() => new MonitorTestWindow());
-    }
-
-    public static void ShowNetworkMonitorWindow(NetworkMonitorServices services)
-    {
-        AvaloniaBootstrapper.EnsureInitialized();
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (_networkMonitorWindow != null)
-            {
-                if (!_networkMonitorWindow.IsVisible)
-                {
-                    _networkMonitorWindow.Show();
-                }
-                _networkMonitorWindow.Activate();
-                return;
-            }
-
-            _networkMonitorWindow = new NetworkMonitorWindow(services);
-            _networkMonitorWindow.Closed += (_, _) => _networkMonitorWindow = null;
-            _networkMonitorWindow.Show();
-        });
-    }
-
-    public static void ShowRemoteStorageBrowserWindow(IEnumerable<IRemoteStorageProvider> providers,
+                public static void ShowRemoteStorageBrowserWindow(IEnumerable<IRemoteStorageProvider> providers,
         RemoteStorageBrowserServices? services = null)
     {
         Show(() => new RemoteStorageBrowserWindow(providers, services));
@@ -237,12 +190,7 @@ public static class ToolsIntegration
         Show(() => new RulerWindow());
     }
 
-    public static void ShowMouseHighlighterWindow(MouseHighlighterOptions options, Action? settingsChanged = null)
-    {
-        MouseHighlighterManager.ShowWindow(options, settingsChanged);
-    }
-
-    public static void ShowVideoConverterWindow(VideoConverterOptions options, VideoConversionHandler handler,
+        public static void ShowVideoConverterWindow(VideoConverterOptions options, VideoConversionHandler handler,
         string? inputFilePath = null)
     {
         Show(() => new VideoConverterWindow(options, handler, inputFilePath));

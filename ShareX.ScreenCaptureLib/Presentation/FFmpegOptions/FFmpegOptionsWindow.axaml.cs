@@ -356,30 +356,30 @@ public partial class FFmpegOptionsWindow : Window
         UpdateUI();
     }
 
+    /// <summary>
+    /// Rebuilds the capture-source lists. The screen itself always comes from the ScreenCast
+    /// portal; the other entries are the session's cameras and PulseAudio/PipeWire sources,
+    /// which are enumerated from the system rather than from ffmpeg.
+    /// </summary>
     private async Task RefreshSourcesAsync(bool selectRecorderDevices = false)
     {
         RefreshDevicesButton.IsEnabled = false;
         DeviceStatusTextBlock.Text = Localization.Strings.FFmpegOptionsWindow_Looking_for_devices;
 
-        DirectShowDevices? devices = null;
+        MediaCaptureDeviceList? devices = null;
         Exception? discoveryError = null;
-        string ffmpegPath = Options.FFmpeg.FFmpegPath;
 
-        if (File.Exists(ffmpegPath))
+        await Task.Run(() =>
         {
-            await Task.Run(() =>
+            try
             {
-                try
-                {
-                    using FFmpegCLIManager ffmpeg = new(ffmpegPath);
-                    devices = ffmpeg.GetDirectShowDevices();
-                }
-                catch (Exception ex)
-                {
-                    discoveryError = ex;
-                }
-            });
-        }
+                devices = FFmpegCLIManager.GetCaptureDevices();
+            }
+            catch (Exception ex)
+            {
+                discoveryError = ex;
+            }
+        });
 
         if (_closed)
         {
@@ -390,35 +390,29 @@ public partial class FFmpegOptionsWindow : Window
         List<FFmpegCaptureDevice> videoSources =
         [
             noSource,
-            new(FFmpegCaptureDevice.GDIGrab.Value, Localization.Strings.FFmpegOptionsWindow_Source_GDI)
+            new(FFmpegCaptureDevice.PipeWire.Value, FFmpegCaptureDevice.PipeWire.Title)
         ];
-
-        if (Helpers.IsWindows10OrGreater())
-        {
-            videoSources.Add(new(FFmpegCaptureDevice.DDAGrab.Value, Localization.Strings.FFmpegOptionsWindow_Source_DDA));
-        }
 
         List<FFmpegCaptureDevice> audioSources = [noSource];
 
         if (devices != null)
         {
-            videoSources.AddRange(devices.VideoDevices.Select(x => new FFmpegCaptureDevice(x, $"dshow ({x})")));
-            audioSources.AddRange(devices.AudioDevices.Select(x => new FFmpegCaptureDevice(x, $"dshow ({x})")));
+            videoSources.AddRange(devices.VideoDevices.Select(x => new FFmpegCaptureDevice(x.Identifier, x.Name)));
+            audioSources.AddRange(devices.AudioDevices.Select(x => new FFmpegCaptureDevice(x.Identifier, x.Name)));
         }
 
         FFmpegOptions options = Options.FFmpeg;
-        if (selectRecorderDevices && videoSources.Any(x => EqualsSource(x, FFmpegCaptureDevice.ScreenCaptureRecorder.Value)))
+
+        if (!videoSources.Any(x => EqualsSource(x, options.VideoSource)))
         {
-            options.VideoSource = FFmpegCaptureDevice.ScreenCaptureRecorder.Value;
-        }
-        else if (!videoSources.Any(x => EqualsSource(x, options.VideoSource)))
-        {
-            options.VideoSource = FFmpegCaptureDevice.GDIGrab.Value;
+            options.VideoSource = FFmpegCaptureDevice.PipeWire.Value;
         }
 
-        if (selectRecorderDevices && audioSources.Any(x => EqualsSource(x, FFmpegCaptureDevice.VirtualAudioCapturer.Value)))
+        if (selectRecorderDevices && audioSources.FirstOrDefault(x =>
+            x.Value.EndsWith(".monitor", StringComparison.Ordinal)) is { } monitorSource)
         {
-            options.AudioSource = FFmpegCaptureDevice.VirtualAudioCapturer.Value;
+            // "Record desktop audio" maps onto the output's monitor source.
+            options.AudioSource = monitorSource.Value;
         }
         else if (!audioSources.Any(x => EqualsSource(x, options.AudioSource)))
         {
@@ -433,6 +427,8 @@ public partial class FFmpegOptionsWindow : Window
         AudioSourceComboBox.SelectedItem = audioSources.First(x => EqualsSource(x, options.AudioSource));
         _settingsLoaded = wasLoaded;
 
+        string ffmpegPath = Options.FFmpeg.FFmpegPath;
+
         if (!File.Exists(ffmpegPath))
         {
             DeviceStatusTextBlock.Text = string.Format(Localization.Strings.FFmpegOptionsWindow_FFmpeg_not_found, ffmpegPath);
@@ -444,8 +440,8 @@ public partial class FFmpegOptionsWindow : Window
         }
         else
         {
-            int deviceCount = Math.Max(0, videoSources.Count - (Helpers.IsWindows10OrGreater() ? 3 : 2)) +
-                              Math.Max(0, audioSources.Count - 1);
+            // Discount the fixed "None" and screen entries so the count reflects real hardware.
+            int deviceCount = Math.Max(0, videoSources.Count - 2) + Math.Max(0, audioSources.Count - 1);
             DeviceStatusTextBlock.Text = deviceCount switch
             {
                 0 => Localization.Strings.FFmpegOptionsWindow_No_devices_found,

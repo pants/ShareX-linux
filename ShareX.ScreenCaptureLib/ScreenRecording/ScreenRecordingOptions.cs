@@ -49,19 +49,6 @@ namespace ShareX.ScreenCaptureLib
         {
             string commands;
 
-            if (IsRecording && !string.IsNullOrEmpty(FFmpeg.VideoSource) &&
-                FFmpeg.VideoSource.Equals(FFmpegCaptureDevice.ScreenCaptureRecorder.Value, StringComparison.OrdinalIgnoreCase))
-            {
-                // https://github.com/rdp/screen-capture-recorder-to-video-windows-free
-                string registryPath = "Software\\screen-capture-recorder";
-                RegistryHelpers.CreateRegistry(registryPath, "start_x", CaptureArea.X);
-                RegistryHelpers.CreateRegistry(registryPath, "start_y", CaptureArea.Y);
-                RegistryHelpers.CreateRegistry(registryPath, "capture_width", CaptureArea.Width);
-                RegistryHelpers.CreateRegistry(registryPath, "capture_height", CaptureArea.Height);
-                RegistryHelpers.CreateRegistry(registryPath, "default_max_fps", 60);
-                RegistryHelpers.CreateRegistry(registryPath, "capture_mouse_default_1", DrawCursor ? 1 : 0);
-            }
-
             if (!IsLossless && FFmpeg.UseCustomCommands && !string.IsNullOrEmpty(FFmpeg.CustomCommands))
             {
                 commands = FFmpeg.CustomCommands.
@@ -95,104 +82,31 @@ namespace ShareX.ScreenCaptureLib
 
             if (IsRecording)
             {
+                // Audio is listed first so ffmpeg maps stream 0 to video when both are present.
+                if (FFmpeg.IsAudioSourceSelected)
+                {
+                    AppendPulseInput(args, FFmpeg.AudioSource);
+                }
+
                 if (FFmpeg.IsVideoSourceSelected)
                 {
-                    if (FFmpeg.VideoSource.Equals(FFmpegCaptureDevice.GDIGrab.Value, StringComparison.OrdinalIgnoreCase))
+                    if (FFmpeg.VideoSource.Equals(FFmpegCaptureDevice.PipeWire.Value, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (FFmpeg.IsAudioSourceSelected)
-                        {
-                            AppendInputDevice(args, "dshow", true);
-                            args.Append($"-i audio={Helpers.EscapeCLIText(FFmpeg.AudioSource)} ");
-                        }
-
-                        string x = isCustom ? "$area_x$" : CaptureArea.X.ToString();
-                        string y = isCustom ? "$area_y$" : CaptureArea.Y.ToString();
-                        string width = isCustom ? "$area_width$" : CaptureArea.Width.ToString();
-                        string height = isCustom ? "$area_height$" : CaptureArea.Height.ToString();
-                        string cursor = isCustom ? "$cursor$" : DrawCursor ? "1" : "0";
-
-                        // https://ffmpeg.org/ffmpeg-devices.html#gdigrab
-                        AppendInputDevice(args, "gdigrab", false);
-                        args.Append($"-framerate {framerate} ");
-                        args.Append($"-offset_x {x} ");
-                        args.Append($"-offset_y {y} ");
-                        args.Append($"-video_size {width}x{height} ");
-                        args.Append($"-draw_mouse {cursor} ");
-                        args.Append("-i desktop ");
-                    }
-                    else if (FFmpeg.VideoSource.Equals(FFmpegCaptureDevice.DDAGrab.Value, StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (FFmpeg.IsAudioSourceSelected)
-                        {
-                            AppendInputDevice(args, "dshow", true);
-                            args.Append($"-i audio={Helpers.EscapeCLIText(FFmpeg.AudioSource)} ");
-                        }
-
-                        DesktopScreen[] screens = DesktopScreen.AllScreens.OrderBy(x => !x.Primary).ToArray();
-                        int monitorIndex = 0;
-                        Rectangle captureArea = screens[0].Bounds;
-                        int maxIntersectionArea = 0;
-
-                        for (int i = 0; i < screens.Length; i++)
-                        {
-                            DesktopScreen screen = screens[i];
-                            Rectangle intersection = Rectangle.Intersect(screen.Bounds, CaptureArea);
-                            int intersectionArea = intersection.Width * intersection.Height;
-
-                            if (intersectionArea > maxIntersectionArea)
-                            {
-                                maxIntersectionArea = intersectionArea;
-
-                                monitorIndex = i;
-                                captureArea = new Rectangle(intersection.X - screen.Bounds.X, intersection.Y - screen.Bounds.Y, intersection.Width, intersection.Height);
-                            }
-                        }
-
-                        if (FFmpeg.IsEvenSizeRequired)
-                        {
-                            captureArea = CaptureHelpers.EvenRectangleSize(captureArea);
-                        }
-
-                        // https://ffmpeg.org/ffmpeg-filters.html#ddagrab
-                        AppendInputDevice(args, "lavfi", false);
-                        args.Append("-i ddagrab=");
-                        args.Append($"output_idx={monitorIndex}:"); // DXGI Output Index to capture.
-                        args.Append($"draw_mouse={DrawCursor.ToString().ToLowerInvariant()}:"); // Whether to draw the mouse cursor.
-                        args.Append($"framerate={framerate}:"); // Framerate at which the desktop will be captured.
-                        args.Append($"offset_x={captureArea.X}:"); // Horizontal offset of the captured video.
-                        args.Append($"offset_y={captureArea.Y}:"); // Vertical offset of the captured video.
-                        args.Append($"video_size={captureArea.Width}x{captureArea.Height}:"); // Specify the size of the captured video.
-                        args.Append("output_fmt=bgra"); // Desired filter output format.
-
-                        if (FFmpeg.VideoCodec != FFmpegVideoCodec.h264_nvenc && FFmpeg.VideoCodec != FFmpegVideoCodec.hevc_nvenc)
-                        {
-                            args.Append(",hwdownload");
-                            args.Append(",format=bgra");
-                        }
-
-                        args.Append(" ");
+                        // Frames arrive on stdin as yuv4mpegpipe, produced from the portal's
+                        // PipeWire stream by WaylandRecordingSource. The y4m header carries the
+                        // size and frame rate, so no -video_size is needed here.
+                        args.Append("-f yuv4mpegpipe ");
+                        args.Append("-thread_queue_size 1024 ");
+                        args.Append("-i - ");
                     }
                     else
                     {
-                        // https://ffmpeg.org/ffmpeg-devices.html#dshow
-                        AppendInputDevice(args, "dshow", FFmpeg.IsAudioSourceSelected);
+                        // Anything else is a V4L2 node, i.e. a webcam.
+                        args.Append("-f v4l2 ");
+                        args.Append("-thread_queue_size 1024 ");
                         args.Append($"-framerate {framerate} ");
-                        args.Append($"-i video={Helpers.EscapeCLIText(FFmpeg.VideoSource)}");
-
-                        if (FFmpeg.IsAudioSourceSelected)
-                        {
-                            args.Append($":audio={Helpers.EscapeCLIText(FFmpeg.AudioSource)} ");
-                        }
-                        else
-                        {
-                            args.Append(" ");
-                        }
+                        args.Append($"-i \"{FFmpeg.VideoSource}\" ");
                     }
-                }
-                else if (FFmpeg.IsAudioSourceSelected)
-                {
-                    AppendInputDevice(args, "dshow", true);
-                    args.Append($"-i audio={Helpers.EscapeCLIText(FFmpeg.AudioSource)} ");
                 }
             }
             else
@@ -337,16 +251,16 @@ namespace ShareX.ScreenCaptureLib
             return args.ToString();
         }
 
-        private void AppendInputDevice(StringBuilder args, string inputDevice, bool audioSource)
+        /// <summary>
+        /// Appends a PulseAudio input. PipeWire serves the same protocol through pipewire-pulse,
+        /// so one code path covers both.
+        /// </summary>
+        private void AppendPulseInput(StringBuilder args, string source)
         {
-            args.Append($"-f {inputDevice} ");
-            args.Append("-thread_queue_size 1024 "); // This option sets the maximum number of queued packets when reading from the file or device.
-            args.Append("-rtbufsize 256M "); // Default real time buffer size is 3041280 (3M)
-
-            if (audioSource)
-            {
-                args.Append("-audio_buffer_size 80 "); // Set audio device buffer size in milliseconds (which can directly impact latency, depending on the device).
-            }
+            args.Append("-f pulse ");
+            args.Append("-thread_queue_size 1024 ");
+            args.Append("-fragment_size 1024 ");
+            args.Append($"-i \"{source}\" ");
         }
     }
 }

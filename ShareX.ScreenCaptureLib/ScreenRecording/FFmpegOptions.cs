@@ -33,7 +33,7 @@ namespace ShareX.ScreenCaptureLib
         // General
         public bool OverrideCLIPath { get; set; } = false;
         public string CLIPath { get; set; } = "";
-        public string VideoSource { get; set; } = FFmpegCaptureDevice.GDIGrab.Value;
+        public string VideoSource { get; set; } = FFmpegCaptureDevice.PipeWire.Value;
         public string AudioSource { get; set; } = FFmpegCaptureDevice.None.Value;
         public FFmpegVideoCodec VideoCodec { get; set; } = FFmpegVideoCodec.libx264;
         public FFmpegAudioCodec AudioCodec { get; set; } = FFmpegAudioCodec.libvoaacenc;
@@ -145,9 +145,13 @@ namespace ShareX.ScreenCaptureLib
             {
                 VideoSource = FFmpegCaptureDevice.None.Value;
             }
-            else if (VideoSource.Equals("GDI grab", StringComparison.OrdinalIgnoreCase))
+            else if (VideoSource.Equals("GDI grab", StringComparison.OrdinalIgnoreCase) ||
+                VideoSource.Equals("gdigrab", StringComparison.OrdinalIgnoreCase) ||
+                VideoSource.Equals("ddagrab", StringComparison.OrdinalIgnoreCase) ||
+                VideoSource.Equals("screen-capture-recorder", StringComparison.OrdinalIgnoreCase))
             {
-                VideoSource = FFmpegCaptureDevice.GDIGrab.Value;
+                // Settings carried over from a Windows installation name devices that do not exist here.
+                VideoSource = FFmpegCaptureDevice.PipeWire.Value;
             }
 
             if (AudioSource.Equals("None", StringComparison.OrdinalIgnoreCase))

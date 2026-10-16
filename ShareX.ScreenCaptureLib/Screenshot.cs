@@ -1,4 +1,4 @@
-﻿#region License Information (GPL v3)
+#region License Information (GPL v3)
 
 /*
     ShareX - A program that allows you to take screenshots and share any file type
@@ -24,15 +24,29 @@
 #endregion License Information (GPL v3)
 
 using ShareX.HelpersLib;
-using System;
+using ShareX.Linux.Capture;
 using System.Drawing;
 using Bitmap = SkiaSharp.SKBitmap;
 
 namespace ShareX.ScreenCaptureLib
 {
+    /// <summary>
+    /// Takes still screenshots.
+    /// </summary>
+    /// <remarks>
+    /// Every grab goes through the compositor: a Wayland client has no access to the framebuffer
+    /// and no way to address another application's window, so ShareX asks
+    /// org.freedesktop.portal.Screenshot for an image and crops it. The user grants the
+    /// permission once; after that, captures are silent on compositors that remember the grant.
+    /// </remarks>
     public partial class Screenshot
     {
+        /// <summary>
+        /// Whether the pointer is drawn into the capture. The compositor decides this for
+        /// portal screenshots, so the preference is only honoured for screen recording.
+        /// </summary>
         public bool CaptureCursor { get; set; } = false;
+
         public bool CaptureClientArea { get; set; } = false;
         public bool RemoveOutsideScreenArea { get; set; } = true;
         public bool CaptureShadow { get; set; } = false;
@@ -48,59 +62,27 @@ namespace ShareX.ScreenCaptureLib
                 rect = Rectangle.Intersect(bounds, rect);
             }
 
-            return CaptureRectangleNative(rect, CaptureCursor);
+            if (rect.Width == 0 || rect.Height == 0)
+            {
+                return null;
+            }
+
+            return WaylandScreenCapture.CaptureRectangle(rect);
         }
 
         public Bitmap CaptureFullscreen()
         {
-            Rectangle bounds = CaptureHelpers.GetScreenBounds();
-
-            return CaptureRectangle(bounds);
+            return WaylandScreenCapture.CaptureDesktop();
         }
 
-        public Bitmap CaptureWindow(IntPtr handle)
+        /// <summary>
+        /// Captures a single window by letting the user point at it in the compositor's own
+        /// picker. Wayland gives clients no way to name or address someone else's window, so the
+        /// choice has to be made outside ShareX.
+        /// </summary>
+        public Bitmap CaptureWindowInteractive()
         {
-            if (handle.ToInt32() > 0)
-            {
-                Rectangle rect;
-
-                if (CaptureClientArea)
-                {
-                    rect = NativeMethods.GetClientRect(handle);
-                }
-                else
-                {
-                    rect = CaptureHelpers.GetWindowRectangle(handle);
-                }
-
-                bool isTaskbarHide = false;
-
-                try
-                {
-                    if (AutoHideTaskbar)
-                    {
-                        isTaskbarHide = NativeMethods.SetTaskbarVisibilityIfIntersect(false, rect);
-                    }
-
-                    return CaptureRectangle(rect);
-                }
-                finally
-                {
-                    if (isTaskbarHide)
-                    {
-                        NativeMethods.SetTaskbarVisibility(true);
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        public Bitmap CaptureActiveWindow()
-        {
-            IntPtr handle = NativeMethods.GetForegroundWindow();
-
-            return CaptureWindow(handle);
+            return WaylandScreenCapture.CaptureInteractive();
         }
 
         public Bitmap CaptureActiveMonitor()
@@ -108,61 +90,6 @@ namespace ShareX.ScreenCaptureLib
             Rectangle bounds = CaptureHelpers.GetActiveScreenBounds();
 
             return CaptureRectangle(bounds);
-        }
-
-        private Bitmap CaptureRectangleNative(Rectangle rect, bool captureCursor = false)
-        {
-            IntPtr handle = NativeMethods.GetDesktopWindow();
-            return CaptureRectangleNative(handle, rect, captureCursor);
-        }
-
-        private Bitmap CaptureRectangleNative(IntPtr handle, Rectangle rect, bool captureCursor = false)
-        {
-            if (rect.Width == 0 || rect.Height == 0)
-            {
-                return null;
-            }
-
-            if (HDRScreenshotColorCorrection)
-            {
-                Bitmap bitmap = CaptureRectangleGDI(handle, rect, false);
-
-                try
-                {
-                    HDRScreenCapture.ApplyColorCorrection(bitmap, rect);
-                }
-                catch (Exception e)
-                {
-                    DebugHelper.WriteException(e, "HDR screenshot color correction failed.");
-                }
-
-                if (captureCursor)
-                {
-                    try
-                    {
-                        CursorData cursorData = new CursorData();
-                        cursorData.DrawCursor(bitmap, rect.Location);
-                    }
-                    catch (Exception e)
-                    {
-                        DebugHelper.WriteException(e, "Cursor capture failed.");
-                    }
-                }
-
-                return bitmap;
-            }
-
-            return CaptureRectangleGDI(handle, rect, captureCursor);
-        }
-
-        private Bitmap CaptureRectangleGDI(IntPtr handle, Rectangle rect, bool captureCursor)
-        {
-            return WindowsImageInterop.Capture(rect, captureCursor ? dc =>
-            {
-                try { new CursorData().DrawCursor(dc, rect.Location); }
-                catch (Exception exception) { DebugHelper.WriteException(exception, "Cursor capture failed."); }
-            }
-            : null, handle);
         }
     }
 }

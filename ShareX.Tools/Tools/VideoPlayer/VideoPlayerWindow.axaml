@@ -19,7 +19,7 @@
             </Style>
         </Border.Styles>
         <Grid>
-            <local:WindowsMediaPlayer x:Name="Player" IsVisible="{Binding HasVideo}"
+            <local:VideoPlayerControl x:Name="Player" IsVisible="{Binding HasVideo}"
                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
             <StackPanel IsVisible="{Binding !HasVideo}" HorizontalAlignment="Center" VerticalAlignment="Center"
                         Spacing="16" Margin="32,32,32,100" MaxWidth="640">

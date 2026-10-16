@@ -79,10 +79,10 @@ public partial class RegionCaptureWindow : Window
     private Border _selectionInfoPanel = null!;
     private TextBlock _selectionInfoText = null!;
     private WriteableBitmap? _magnifierBitmap;
-    private IReadOnlyList<SimpleWindowInfo> _windows = Array.Empty<SimpleWindowInfo>();
+    private IReadOnlyList<DrawingRectangle> _snapCandidates = Array.Empty<DrawingRectangle>();
     private readonly Dictionary<SelectionResizeNodeKind, Border> _regionResizeNodes = [];
-    private SimpleWindowInfo? _hoverCandidate;
-    private SimpleWindowInfo? _selectedCandidate;
+    private DrawingRectangle? _hoverCandidate;
+    private DrawingRectangle? _selectedCandidate;
     private RegionInteraction _interaction;
     private SelectionResizeNodeKind? _resizeNode;
     private Point _pressPoint;
@@ -485,7 +485,7 @@ public partial class RegionCaptureWindow : Window
             UpdateToolbarPosition(new PixelPoint(cursorPosition.X, cursorPosition.Y));
             UpdateHud(_lastPointerPoint);
 
-            _ = LoadWindowRegionsAsync();
+            _ = LoadSnapCandidatesAsync();
 
             int inputDelay = Math.Max(0, RegionCaptureOptions.InputDelay);
             if (inputDelay > 0)
@@ -505,7 +505,16 @@ public partial class RegionCaptureWindow : Window
         }
     }
 
-    private async Task LoadWindowRegionsAsync()
+    /// <summary>
+    /// Collects the rectangles the selection snaps to when the pointer hovers over them.
+    /// </summary>
+    /// <remarks>
+    /// On Windows this listed every visible window. Wayland does not let a client see other
+    /// applications' windows at all, so the monitors are offered instead: hovering highlights a
+    /// whole screen, and a single click grabs it. Capturing one specific window goes through the
+    /// compositor's own picker, which ShareX reaches with the interactive screenshot portal.
+    /// </remarks>
+    private async Task LoadSnapCandidatesAsync()
     {
         if (_request == null || !_request.RegionCaptureOptions.DetectWindows)
         {
@@ -514,22 +523,12 @@ public partial class RegionCaptureWindow : Window
 
         try
         {
-            IntPtr ignoredHandle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-            WindowsRectangleList windows = new WindowsRectangleList
-            {
-                IncludeChildWindows = _request.RegionCaptureOptions.DetectControls,
-                Timeout = 5000
-            };
+            IReadOnlyList<DrawingRectangle> result = await Task.Run(() =>
+                DesktopScreen.AllScreens.Select(screen => screen.Bounds).ToArray());
 
-            if (ignoredHandle != IntPtr.Zero)
-            {
-                windows.IgnoreHandleList.Add(ignoredHandle);
-            }
-
-            IReadOnlyList<SimpleWindowInfo> result = await Task.Run(windows.GetWindowInfoList);
             if (!_closing)
             {
-                _windows = result;
+                _snapCandidates = result;
                 UpdateHover(_lastPointerPoint);
             }
         }
@@ -1068,17 +1067,16 @@ public partial class RegionCaptureWindow : Window
 
         double screenX = _request.ScreenBounds.X + Math.Round(imagePoint.X);
         double screenY = _request.ScreenBounds.Y + Math.Round(imagePoint.Y);
-        SimpleWindowInfo? candidate = _windows.FirstOrDefault(window =>
-            ContainsPoint(window.Rectangle, screenX, screenY));
+        DrawingRectangle candidateRectangle = _snapCandidates.FirstOrDefault(rectangle =>
+            ContainsPoint(rectangle, screenX, screenY));
 
-        if (candidate == null)
+        if (candidateRectangle.IsEmpty)
         {
             _hoverCandidate = null;
             _regionOverlay.HoverRectangle = default;
             return;
         }
 
-        DrawingRectangle candidateRectangle = candidate.Rectangle;
         double candidateLeft = (double)candidateRectangle.X - _request.ScreenBounds.X;
         double candidateTop = (double)candidateRectangle.Y - _request.ScreenBounds.Y;
         double left = Math.Max(0, candidateLeft);
@@ -1089,7 +1087,7 @@ public partial class RegionCaptureWindow : Window
             ? new Rect(left, top, right - left, bottom - top)
             : default;
 
-        _hoverCandidate = RegionSelectionOverlay.IsValid(hover) ? candidate : null;
+        _hoverCandidate = RegionSelectionOverlay.IsValid(hover) ? candidateRectangle : null;
         _regionOverlay.HoverRectangle = hover;
     }
 
@@ -1101,7 +1099,7 @@ public partial class RegionCaptureWindow : Window
             y < (double)rectangle.Y + rectangle.Height;
     }
 
-    private void SetSelection(Rect rectangle, SimpleWindowInfo? candidate)
+    private void SetSelection(Rect rectangle, DrawingRectangle? candidate)
     {
         _regionOverlay.SelectionRectangle = RegionSelectionOverlay.Intersect(
             rectangle,
@@ -1598,17 +1596,13 @@ public partial class RegionCaptureWindow : Window
         Close();
     }
 
+    /// <summary>
+    /// Identifies the window a selection landed on. Wayland keeps other applications' windows
+    /// private, so nothing can be reported and the capture's metadata stays empty.
+    /// </summary>
     private WindowInfo? FindTopLevelWindowInfo(DrawingRectangle selectedRectangle)
     {
-        if (_selectedCandidate is { IsWindow: true })
-        {
-            return _selectedCandidate.WindowInfo;
-        }
-
-        DrawingPoint point = new DrawingPoint(
-            selectedRectangle.Left + selectedRectangle.Width / 2,
-            selectedRectangle.Top + selectedRectangle.Height / 2);
-        return _windows.FirstOrDefault(window => window.IsWindow && window.Rectangle.Contains(point))?.WindowInfo;
+        return null;
     }
 
     private void CancelCapture()

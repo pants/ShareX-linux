@@ -25,6 +25,7 @@
 
 using ShareX.HelpersLib;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using MessageBox = ShareX.AvaloniaUI.MessageBox;
@@ -49,11 +50,15 @@ namespace ShareX.NativeMessagingHost
                     {
                         host.Write(input);
 
-                        string filePath = FileHelpers.GetAbsolutePath("ShareX.exe");
+                        string filePath = FileHelpers.GetAbsolutePath("ShareX");
                         string tempFilePath = FileHelpers.GetTempFilePath("json");
                         File.WriteAllText(tempFilePath, input, Encoding.UTF8);
-                        string argument = $"-NativeMessagingInput \"{tempFilePath}\"";
-                        NativeMethods.CreateProcess(filePath, argument, CreateProcessFlags.CREATE_BREAKAWAY_FROM_JOB);
+
+                        // Detach from this short-lived host so ShareX outlives the browser's pipe.
+                        ProcessStartInfo startInfo = new(filePath) { UseShellExecute = false };
+                        startInfo.ArgumentList.Add("-NativeMessagingInput");
+                        startInfo.ArgumentList.Add(tempFilePath);
+                        Process.Start(startInfo)?.Dispose();
                     }
                 }
                 catch (Exception e)

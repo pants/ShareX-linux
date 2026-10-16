@@ -31,7 +31,7 @@ namespace ShareX.Tools;
 
 public sealed partial class VideoPlayerViewModel : ViewModelBase, IDisposable
 {
-    private readonly WindowsMediaPlayer _player;
+    private readonly VideoPlayerControl _player;
     private readonly CancellationTokenSource _lifetime = new();
     private CancellationTokenSource? _loadCancellation;
     private bool _updatingPosition, _seeking, _resumeAfterSeek, _disposed;
@@ -45,7 +45,7 @@ public sealed partial class VideoPlayerViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _isMuted;
     [ObservableProperty] private string _statusText = Strings.VideoTrimmer_ChooseVideo;
 
-    public VideoPlayerViewModel(WindowsMediaPlayer player)
+    public VideoPlayerViewModel(VideoPlayerControl player)
     {
         _player = player;
         _player.PositionChanged += UpdatePosition;

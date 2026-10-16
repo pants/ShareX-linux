@@ -29,6 +29,7 @@ using Avalonia;
 using ShareX.AvaloniaUI.Imaging;
 using ShareX.AvaloniaUI.Theming;
 using ShareX.HelpersLib;
+using ShareX.Linux.Desktop;
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -241,11 +242,12 @@ public sealed class ImageHistoryThumbnailLoader : IDisposable
 
         try
         {
-            using DrawingBitmap? shellThumbnail = NativeMethods.GetFileThumbnail(filePath, new DrawingSize(width, height));
-            if (shellThumbnail != null)
+            // The desktop's shared thumbnail cache covers videos and documents ShareX cannot decode.
+            using DrawingBitmap? cachedThumbnail = FreedesktopThumbnails.TryLoad(filePath, Math.Max(width, height));
+            if (cachedThumbnail != null)
             {
                 if (token.IsCancellationRequested) return null;
-                return BitmapConversionHelpers.CreatePreview(shellThumbnail, new PixelSize(width, height));
+                return BitmapConversionHelpers.CreatePreview(cachedThumbnail, new PixelSize(width, height));
             }
         }
         catch (OperationCanceledException)

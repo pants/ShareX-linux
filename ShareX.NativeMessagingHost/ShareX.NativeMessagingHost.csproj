@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <BaseOutputPath>$(MSBuildThisFileDirectory)..\ShareX\bin\</BaseOutputPath>
-    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)../ShareX/bin/</BaseOutputPath>
+    <OutputType>Exe</OutputType>
     <AssemblyName>ShareX_NativeMessagingHost</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
