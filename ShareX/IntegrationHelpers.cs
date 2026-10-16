@@ -23,286 +23,56 @@
 
 #endregion License Information (GPL v3)
 
-using ShareX.HelpersLib;
-using ShareX.Localization;
 using System;
+using System.Collections.Generic;
 using System.IO;
-using MessageBox = ShareX.AvaloniaUI.MessageBox;
-using MessageBoxButtons = ShareX.AvaloniaUI.MessageBoxButtons;
-using MessageBoxIcon = ShareX.AvaloniaUI.MessageBoxIcon;
+using System.Linq;
+using ShareX.HelpersLib;
+using ShareX.Linux;
 
 namespace ShareX
 {
+    /// <summary>
+    /// Hooks ShareX into the rest of the desktop.
+    /// </summary>
+    /// <remarks>
+    /// On Linux this is just the browser native-messaging manifests: each browser reads them
+    /// from a well-known directory under the user's profile, so there is nothing to register
+    /// with the system. File-type associations and launcher entries are left to packaging and to
+    /// the user's own desktop configuration.
+    /// </remarks>
     public static class IntegrationHelpers
     {
-        private static readonly string ApplicationPath = $"\"{Environment.ProcessPath}\"";
-        private static readonly string FileIconPath = $"\"{FileHelpers.GetAbsolutePath("ShareX_File_Icon.ico")}\"";
+        private const string ChromeHostName = "com.getsharex.sharex";
+        private const string FirefoxHostName = "ShareX";
+        private const string ChromeExtensionId = "chrome-extension://nlkoigbdolhchiicbonbihbphgamnaoc/";
+        private const string FirefoxExtensionId = "firefox@getsharex.com";
 
-        private static readonly string ShellExtMenuName = "ShareX";
-        private static readonly string ShellExtMenuFiles = $@"Software\Classes\*\shell\{ShellExtMenuName}";
-        private static readonly string ShellExtMenuFilesCmd = $@"{ShellExtMenuFiles}\command";
-        private static readonly string ShellExtMenuDirectory = $@"Software\Classes\Directory\shell\{ShellExtMenuName}";
-        private static readonly string ShellExtMenuDirectoryCmd = $@"{ShellExtMenuDirectory}\command";
-        private static readonly string ShellExtDesc = Strings.IntegrationHelpers_UploadWithShareX;
-        private static readonly string ShellExtIcon = $"{ApplicationPath},0";
-        private static readonly string ShellExtPath = $"{ApplicationPath} \"%1\"";
+        /// <summary>Chromium-family profile directories that read native-messaging manifests.</summary>
+        private static readonly string[] chromiumProfileDirectories =
+        [
+            "google-chrome",
+            "google-chrome-beta",
+            "chromium",
+            "BraveSoftware/Brave-Browser",
+            "microsoft-edge",
+            "vivaldi"
+        ];
 
-        private static readonly string ShellExtEditName = "ShareXImageEditor";
-        private static readonly string ShellExtEditImage = $@"Software\Classes\SystemFileAssociations\image\shell\{ShellExtEditName}";
-        private static readonly string ShellExtEditImageCmd = $@"{ShellExtEditImage}\command";
-        private static readonly string ShellExtEditDesc = Strings.IntegrationHelpers_EditWithShareX;
-        private static readonly string ShellExtEditIcon = $"{ApplicationPath},0";
-        private static readonly string ShellExtEditPath = $"{ApplicationPath} -ImageEditor \"%1\"";
+        private static string NativeMessagingHostPath => FileHelpers.GetAbsolutePath("ShareX_NativeMessagingHost");
 
-        private static readonly string ShellCustomUploaderExtensionPath = @"Software\Classes\.sxcu";
-        private static readonly string ShellCustomUploaderExtensionValue = "ShareX.sxcu";
-        private static readonly string ShellCustomUploaderAssociatePath = $@"Software\Classes\{ShellCustomUploaderExtensionValue}";
-        private static readonly string ShellCustomUploaderAssociateValue = "ShareX custom uploader";
-        private static readonly string ShellCustomUploaderIconPath = $@"{ShellCustomUploaderAssociatePath}\DefaultIcon";
-        private static readonly string ShellCustomUploaderIconValue = $"{FileIconPath}";
-        private static readonly string ShellCustomUploaderCommandPath = $@"{ShellCustomUploaderAssociatePath}\shell\open\command";
-        private static readonly string ShellCustomUploaderCommandValue = $"{ApplicationPath} -CustomUploader \"%1\"";
-
-        private static readonly string ShellImageEffectExtensionPath = @"Software\Classes\.sxie";
-        private static readonly string ShellImageEffectExtensionValue = "ShareX.sxie";
-        private static readonly string ShellImageEffectAssociatePath = $@"Software\Classes\{ShellImageEffectExtensionValue}";
-        private static readonly string ShellImageEffectAssociateValue = "ShareX image effect";
-        private static readonly string ShellImageEffectIconPath = $@"{ShellImageEffectAssociatePath}\DefaultIcon";
-        private static readonly string ShellImageEffectIconValue = $"{FileIconPath}";
-        private static readonly string ShellImageEffectCommandPath = $@"{ShellImageEffectAssociatePath}\shell\open\command";
-        private static readonly string ShellImageEffectCommandValue = $"{ApplicationPath} -ImageEffect \"%1\"";
-
-        private static readonly string ChromeNativeMessagingHosts = @"SOFTWARE\Google\Chrome\NativeMessagingHosts\com.getsharex.sharex";
-        private static readonly string FirefoxNativeMessagingHosts = @"SOFTWARE\Mozilla\NativeMessagingHosts\ShareX";
-        private static readonly string ChromeHostManifestFilePath = FileHelpers.GetAbsolutePath("host-manifest-chrome.json");
-        private static readonly string FirefoxHostManifestFilePath = FileHelpers.GetAbsolutePath("host-manifest-firefox.json");
-
-        public static bool CheckShellContextMenuButton()
-        {
-            try
-            {
-                return RegistryHelpers.CheckStringValue(ShellExtMenuFilesCmd, null, ShellExtPath) &&
-                    RegistryHelpers.CheckStringValue(ShellExtMenuDirectoryCmd, null, ShellExtPath);
-            }
-            catch (Exception e)
-            {
-                DebugHelper.WriteException(e);
-            }
-
-            return false;
-        }
-
-        public static void CreateShellContextMenuButton(bool create)
-        {
-            try
-            {
-                if (create)
-                {
-                    UnregisterShellContextMenuButton();
-                    RegisterShellContextMenuButton();
-                }
-                else
-                {
-                    UnregisterShellContextMenuButton();
-                }
-            }
-            catch (Exception e)
-            {
-                DebugHelper.WriteException(e);
-            }
-        }
-
-        private static void RegisterShellContextMenuButton()
-        {
-            RegistryHelpers.CreateRegistry(ShellExtMenuFiles, ShellExtDesc);
-            RegistryHelpers.CreateRegistry(ShellExtMenuFiles, "Icon", ShellExtIcon);
-            RegistryHelpers.CreateRegistry(ShellExtMenuFilesCmd, ShellExtPath);
-
-            RegistryHelpers.CreateRegistry(ShellExtMenuDirectory, ShellExtDesc);
-            RegistryHelpers.CreateRegistry(ShellExtMenuDirectory, "Icon", ShellExtIcon);
-            RegistryHelpers.CreateRegistry(ShellExtMenuDirectoryCmd, ShellExtPath);
-        }
-
-        private static void UnregisterShellContextMenuButton()
-        {
-            RegistryHelpers.RemoveRegistry(ShellExtMenuFiles);
-            RegistryHelpers.RemoveRegistry(ShellExtMenuDirectory);
-        }
-
-        public static bool CheckEditShellContextMenuButton()
-        {
-            try
-            {
-                return RegistryHelpers.CheckStringValue(ShellExtEditImageCmd, null, ShellExtEditPath);
-            }
-            catch (Exception e)
-            {
-                DebugHelper.WriteException(e);
-            }
-
-            return false;
-        }
-
-        public static void CreateEditShellContextMenuButton(bool create)
-        {
-            try
-            {
-                if (create)
-                {
-                    UnregisterEditShellContextMenuButton();
-                    RegisterEditShellContextMenuButton();
-                }
-                else
-                {
-                    UnregisterEditShellContextMenuButton();
-                }
-            }
-            catch (Exception e)
-            {
-                DebugHelper.WriteException(e);
-            }
-        }
-
-        private static void RegisterEditShellContextMenuButton()
-        {
-            RegistryHelpers.CreateRegistry(ShellExtEditImage, ShellExtEditDesc);
-            RegistryHelpers.CreateRegistry(ShellExtEditImage, "Icon", ShellExtEditIcon);
-            RegistryHelpers.CreateRegistry(ShellExtEditImageCmd, ShellExtEditPath);
-        }
-
-        private static void UnregisterEditShellContextMenuButton()
-        {
-            RegistryHelpers.RemoveRegistry(ShellExtEditImage);
-        }
-
-        public static bool CheckCustomUploaderExtension()
-        {
-            try
-            {
-                return RegistryHelpers.CheckStringValue(ShellCustomUploaderExtensionPath, null, ShellCustomUploaderExtensionValue) &&
-                    RegistryHelpers.CheckStringValue(ShellCustomUploaderCommandPath, null, ShellCustomUploaderCommandValue);
-            }
-            catch (Exception e)
-            {
-                DebugHelper.WriteException(e);
-            }
-
-            return false;
-        }
-
-        public static void CreateCustomUploaderExtension(bool create)
-        {
-            try
-            {
-                if (create)
-                {
-                    UnregisterCustomUploaderExtension();
-                    RegisterCustomUploaderExtension();
-                }
-                else
-                {
-                    UnregisterCustomUploaderExtension();
-                }
-            }
-            catch (Exception e)
-            {
-                DebugHelper.WriteException(e);
-            }
-        }
-
-        private static void RegisterCustomUploaderExtension()
-        {
-            RegistryHelpers.CreateRegistry(ShellCustomUploaderExtensionPath, ShellCustomUploaderExtensionValue);
-            RegistryHelpers.CreateRegistry(ShellCustomUploaderAssociatePath, ShellCustomUploaderAssociateValue);
-            RegistryHelpers.CreateRegistry(ShellCustomUploaderIconPath, ShellCustomUploaderIconValue);
-            RegistryHelpers.CreateRegistry(ShellCustomUploaderCommandPath, ShellCustomUploaderCommandValue);
-
-            NativeMethods.SHChangeNotify(HChangeNotifyEventID.SHCNE_ASSOCCHANGED, HChangeNotifyFlags.SHCNF_FLUSH, IntPtr.Zero, IntPtr.Zero);
-        }
-
-        private static void UnregisterCustomUploaderExtension()
-        {
-            RegistryHelpers.RemoveRegistry(ShellCustomUploaderExtensionPath);
-            RegistryHelpers.RemoveRegistry(ShellCustomUploaderAssociatePath);
-        }
-
-        public static bool CheckImageEffectExtension()
-        {
-            try
-            {
-                return RegistryHelpers.CheckStringValue(ShellImageEffectExtensionPath, null, ShellImageEffectExtensionValue) &&
-                    RegistryHelpers.CheckStringValue(ShellImageEffectCommandPath, null, ShellImageEffectCommandValue);
-            }
-            catch (Exception e)
-            {
-                DebugHelper.WriteException(e);
-            }
-
-            return false;
-        }
-
-        public static void CreateImageEffectExtension(bool create)
-        {
-            try
-            {
-                if (create)
-                {
-                    UnregisterImageEffectExtension();
-                    RegisterImageEffectExtension();
-                }
-                else
-                {
-                    UnregisterImageEffectExtension();
-                }
-            }
-            catch (Exception e)
-            {
-                DebugHelper.WriteException(e);
-            }
-        }
-
-        private static void RegisterImageEffectExtension()
-        {
-            RegistryHelpers.CreateRegistry(ShellImageEffectExtensionPath, ShellImageEffectExtensionValue);
-            RegistryHelpers.CreateRegistry(ShellImageEffectAssociatePath, ShellImageEffectAssociateValue);
-            RegistryHelpers.CreateRegistry(ShellImageEffectIconPath, ShellImageEffectIconValue);
-            RegistryHelpers.CreateRegistry(ShellImageEffectCommandPath, ShellImageEffectCommandValue);
-
-            NativeMethods.SHChangeNotify(HChangeNotifyEventID.SHCNE_ASSOCCHANGED, HChangeNotifyFlags.SHCNF_FLUSH, IntPtr.Zero, IntPtr.Zero);
-        }
-
-        private static void UnregisterImageEffectExtension()
-        {
-            RegistryHelpers.RemoveRegistry(ShellImageEffectExtensionPath);
-            RegistryHelpers.RemoveRegistry(ShellImageEffectAssociatePath);
-        }
-
-        public static bool CheckChromeExtensionSupport()
-        {
-            try
-            {
-                return RegistryHelpers.CheckStringValue(ChromeNativeMessagingHosts, null, ChromeHostManifestFilePath) && File.Exists(ChromeHostManifestFilePath);
-            }
-            catch (Exception e)
-            {
-                DebugHelper.WriteException(e);
-            }
-
-            return false;
-        }
+        public static bool CheckChromeExtensionSupport() =>
+            GetChromiumManifestPaths().Any(File.Exists);
 
         public static void CreateChromeExtensionSupport(bool create)
         {
             try
             {
-                if (create)
+                string manifest = BuildManifest(ChromeHostName, "allowed_origins", ChromeExtensionId);
+
+                foreach (string path in GetChromiumManifestPaths())
                 {
-                    UnregisterChromeExtensionSupport();
-                    RegisterChromeExtensionSupport();
-                }
-                else
-                {
-                    UnregisterChromeExtensionSupport();
+                    WriteOrRemoveManifest(path, manifest, create);
                 }
             }
             catch (Exception e)
@@ -311,43 +81,15 @@ namespace ShareX
             }
         }
 
-        private static void RegisterChromeExtensionSupport()
-        {
-            RegistryHelpers.CreateRegistry(ChromeNativeMessagingHosts, ChromeHostManifestFilePath);
-        }
-
-        private static void UnregisterChromeExtensionSupport()
-        {
-            RegistryHelpers.RemoveRegistry(ChromeNativeMessagingHosts);
-        }
-
-        public static bool CheckFirefoxAddonSupport()
-        {
-            try
-            {
-                return RegistryHelpers.CheckStringValue(FirefoxNativeMessagingHosts, null, FirefoxHostManifestFilePath) && File.Exists(FirefoxHostManifestFilePath);
-            }
-            catch (Exception e)
-            {
-                DebugHelper.WriteException(e);
-            }
-
-            return false;
-        }
+        public static bool CheckFirefoxAddonSupport() => File.Exists(GetFirefoxManifestPath());
 
         public static void CreateFirefoxAddonSupport(bool create)
         {
             try
             {
-                if (create)
-                {
-                    UnregisterFirefoxAddonSupport();
-                    RegisterFirefoxAddonSupport();
-                }
-                else
-                {
-                    UnregisterFirefoxAddonSupport();
-                }
+                string manifest = BuildManifest(FirefoxHostName, "allowed_extensions", FirefoxExtensionId);
+
+                WriteOrRemoveManifest(GetFirefoxManifestPath(), manifest, create);
             }
             catch (Exception e)
             {
@@ -355,67 +97,57 @@ namespace ShareX
             }
         }
 
-        private static void RegisterFirefoxAddonSupport()
-        {
-            RegistryHelpers.CreateRegistry(FirefoxNativeMessagingHosts, FirefoxHostManifestFilePath);
-        }
-
-        private static void UnregisterFirefoxAddonSupport()
-        {
-            RegistryHelpers.RemoveRegistry(FirefoxNativeMessagingHosts);
-        }
-
-        public static bool CheckSendToMenuButton()
-        {
-            return ShortcutHelpers.CheckShortcut(Environment.SpecialFolder.SendTo, "ShareX", Environment.ProcessPath);
-        }
-
-        public static bool CreateSendToMenuButton(bool create)
-        {
-            return ShortcutHelpers.SetShortcut(create, Environment.SpecialFolder.SendTo, "ShareX", Environment.ProcessPath);
-        }
-
-        public static bool CheckSteamShowInApp()
-        {
-            return File.Exists(AppPaths.SteamInAppFilePath);
-        }
-
-        public static void SteamShowInApp(bool showInApp)
-        {
-            string path = AppPaths.SteamInAppFilePath;
-
-            try
-            {
-                if (showInApp)
-                {
-                    FileHelpers.CreateEmptyFile(path);
-                }
-                else if (File.Exists(path))
-                {
-                    File.Delete(path);
-                }
-            }
-            catch (Exception e)
-            {
-                DebugHelper.WriteException(e);
-                e.ShowError();
-                return;
-            }
-
-            MessageBox.Show(Strings.ApplicationSettingsForm_cbSteamShowInApp_CheckedChanged_For_settings_to_take_effect_ShareX_needs_to_be_reopened_from_Steam_,
-                "ShareX", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
+        /// <summary>Removes everything ShareX wrote outside its own configuration directory.</summary>
         public static void Uninstall()
         {
-            StartupManager.State = StartupState.Disabled;
-            CreateShellContextMenuButton(false);
-            CreateEditShellContextMenuButton(false);
-            CreateCustomUploaderExtension(false);
-            CreateImageEffectExtension(false);
-            CreateSendToMenuButton(false);
-            UnregisterChromeExtensionSupport();
-            UnregisterFirefoxAddonSupport();
+            CreateChromeExtensionSupport(false);
+            CreateFirefoxAddonSupport(false);
+        }
+
+        private static IEnumerable<string> GetChromiumManifestPaths()
+        {
+            // Chromium browsers look under the profile root, except when they are in a Flatpak,
+            // which ShareX cannot write into anyway.
+            foreach (string browser in chromiumProfileDirectories)
+            {
+                string root = Path.Combine(LinuxEnvironment.ConfigHome, browser);
+
+                // Only offer a browser the user actually has.
+                if (Directory.Exists(root))
+                {
+                    yield return Path.Combine(root, "NativeMessagingHosts", ChromeHostName + ".json");
+                }
+            }
+        }
+
+        private static string GetFirefoxManifestPath() =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".mozilla", "native-messaging-hosts", FirefoxHostName + ".json");
+
+        private static string BuildManifest(string name, string allowedKey, string allowedValue) =>
+            $$"""
+            {
+              "name": "{{name}}",
+              "description": "ShareX",
+              "path": "{{NativeMessagingHostPath}}",
+              "type": "stdio",
+              "{{allowedKey}}": [
+                "{{allowedValue}}"
+              ]
+            }
+            """;
+
+        private static void WriteOrRemoveManifest(string path, string manifest, bool create)
+        {
+            if (create)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, manifest);
+            }
+            else if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
         }
     }
 }

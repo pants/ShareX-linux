@@ -38,7 +38,7 @@ using ShareX.HelpersLib;
 using ShareX.ImageEditor.Integration;
 using ShareX.Localization;
 using ShareX.ScreenCaptureLib;
-using ShareX.ScreenRecordingLib;
+using ShareX.Linux.Desktop;
 using ShareX.Tools;
 using ShareX.UploadersLib;
 using SkiaSharp;
@@ -157,7 +157,6 @@ internal sealed class TaskSettingsPageBuilder
         pages.Add("upload-filters", BuildUploaderFiltersPage());
         pages.Add("tools", BuildToolsPage());
         pages.Add("tools-image-editor", BuildImageEditorPage());
-        pages.Add("tools-mouse-highlighter", BuildMouseHighlighterPage());
         pages.Add("actions", BuildActionsPage());
         pages.Add("watch-folders", BuildWatchFoldersPage());
         pages.Add("advanced", BuildAdvancedPage());
@@ -458,9 +457,7 @@ internal sealed class TaskSettingsPageBuilder
                 Check(Strings.TaskSettingsWindow_HideTaskbarWhenItIntersectsACapturedWindow, () => capture.CaptureAutoHideTaskbar, value => capture.CaptureAutoHideTaskbar = value),
                 Check(Strings.TaskSettingsWindow_AutomaticallyHideDesktopIcons, () => capture.CaptureAutoHideDesktopIcons, value => capture.CaptureAutoHideDesktopIcons = value),
                 Check(Strings.TaskSettingsWindow_HDRScreenshotColorCorrector, () => capture.HDRScreenshotColorCorrection, value => capture.HDRScreenshotColorCorrection = value)),
-            EnabledCard(_captureOverride, Strings.TaskSettingsWindow_PreconfiguredRegion, regionGrid, selectRegion),
-            EnabledCard(_captureOverride, Strings.TaskSettingsWindow_PreconfiguredWindow,
-                Row(Strings.TaskSettingsWindow_WindowTitle, Text(() => capture.CaptureCustomWindow, value => capture.CaptureCustomWindow = value))));
+            EnabledCard(_captureOverride, Strings.TaskSettingsWindow_PreconfiguredRegion, regionGrid, selectRegion));
     }
 
     private Control BuildRegionCapturePage()
@@ -509,32 +506,14 @@ internal sealed class TaskSettingsPageBuilder
     private Control BuildScreenRecorderPage()
     {
         TaskSettingsCapture capture = _settings.CaptureSettings;
-        BoundValue<bool> native = new(capture.ScreenRecordUseNative, value => capture.ScreenRecordUseNative = value);
-        BoundValue<bool> recordSystemAudio = new(capture.ScreenRecordSystemAudio, value => capture.ScreenRecordSystemAudio = value);
-        Control systemAudio = Check(Strings.TaskSettingsWindow_NativeRecorderSystemAudio, recordSystemAudio);
-        ComboBox systemAudioDevices = AudioDeviceCombo(AudioCaptureDevices.GetSystemAudioDevices,
-            () => capture.ScreenRecordSystemAudioDeviceId, value => capture.ScreenRecordSystemAudioDeviceId = value,
-            Strings.TaskSettingsWindow_NativeRecorderDefaultSystemAudioDevice, Strings.TaskSettingsWindow_NativeRecorderUnavailableSystemAudioDevice);
-        BindEnabled(systemAudioDevices, recordSystemAudio);
-        Control systemAudioDevice = Row(Strings.TaskSettingsWindow_NativeRecorderSystemAudioDevice, systemAudioDevices);
-        BoundValue<bool> recordMicrophone = new(capture.ScreenRecordMicrophone, value => capture.ScreenRecordMicrophone = value);
-        Control microphone = Check(Strings.TaskSettingsWindow_NativeRecorderMicrophone, recordMicrophone);
-        ComboBox microphones = AudioDeviceCombo(AudioCaptureDevices.GetMicrophones,
-            () => capture.ScreenRecordMicrophoneDeviceId, value => capture.ScreenRecordMicrophoneDeviceId = value,
-            Strings.TaskSettingsWindow_NativeRecorderDefaultMicrophone, Strings.TaskSettingsWindow_NativeRecorderUnavailableMicrophone);
-        BindEnabled(microphones, recordMicrophone);
-        Control microphoneDevice = Row(Strings.TaskSettingsWindow_NativeRecorderMicrophoneDevice, microphones);
-        Control showBar = Check(Strings.ScreenRecorderBar_ShowBeforeRecording, () => capture.ScreenRecordShowBar, value => capture.ScreenRecordShowBar = value);
-        BindEnabled(showBar, native);
-        Control hardware = Check(Strings.TaskSettingsWindow_NativeRecorderHardware, () => capture.ScreenRecordRequireHardwareEncoder, value => capture.ScreenRecordRequireHardwareEncoder = value);
-        NumericUpDown bitrateControl = Number(() => capture.ScreenRecordVideoBitrate, value => capture.ScreenRecordVideoBitrate = (int)value, 100, 200000, 100);
-        bitrateControl.Width = 160;
-        Control bitrate = Row(Strings.TaskSettingsWindow_NativeRecorderBitrate, bitrateControl);
+
         BoundValue<bool> recordCamera = new(capture.ScreenRecordCamera, value => capture.ScreenRecordCamera = value);
         Control cameraEnabled = Check(Strings.TaskSettingsWindow_NativeRecorderCamera_Enabled, recordCamera);
-        ComboBox cameras = CaptureDeviceCombo(() => CameraCaptureDevices.GetCameras().Select(device => (device.Id, device.Name)).ToArray(),
+        ComboBox cameras = CaptureDeviceCombo(
+            () => MediaCaptureDevices.GetVideoSources().Select(device => (device.Identifier, device.Name)).ToArray(),
             () => capture.ScreenRecordCameraDeviceId, value => capture.ScreenRecordCameraDeviceId = value,
-            Strings.TaskSettingsWindow_NativeRecorderCamera_DefaultDevice, Strings.TaskSettingsWindow_NativeRecorderCamera_UnavailableDevice,
+            Strings.TaskSettingsWindow_NativeRecorderCamera_DefaultDevice,
+            Strings.TaskSettingsWindow_NativeRecorderCamera_UnavailableDevice,
             Strings.TaskSettingsWindow_NativeRecorderCamera_NoDevices);
         Control cameraDevice = Row(Strings.TaskSettingsWindow_NativeRecorderCamera_Device, cameras);
         Control cameraResolution = Row(Strings.TaskSettingsWindow_NativeRecorderCamera_Resolution,
@@ -564,18 +543,14 @@ internal sealed class TaskSettingsPageBuilder
                     ? Strings.TaskSettingsWindow_NativeRecorderCamera_Circle : Strings.TaskSettingsWindow_NativeRecorderCamera_Rectangle));
         Control cameraMargin = Row(Strings.TaskSettingsWindow_NativeRecorderCamera_Margin,
             Number(() => capture.ScreenRecordCameraMargin, value => capture.ScreenRecordCameraMargin = (int)value, 0, 1000));
+
         Control[] cameraControls = [cameraDevice, cameraResolution, cameraFps, cameraShape, cameraPosition, cameraWidth, cameraMargin];
         foreach (Control control in cameraControls) BindEnabled(control, recordCamera);
+
         StackPanel cameraContent = new() { Spacing = 4 };
         cameraContent.Children.Add(cameraEnabled);
         foreach (Control control in cameraControls) cameraContent.Children.Add(control);
-        BindEnabled(cameraContent, native);
-        Control cameraPanel = EnabledCard(_captureOverride, Strings.TaskSettingsWindow_NativeRecorderCamera, cameraContent);
-        Control twoPass = Check(Strings.TaskSettingsWindow_RecordLosslesslyFirstThenApplyEncodingOptions, () => capture.ScreenRecordTwoPassEncoding, value => capture.ScreenRecordTwoPassEncoding = value);
-        Control legacyOptions = Button(Strings.TaskSettingsWindow_ScreenRecordingOptionsWithEllipsis, ShowScreenRecordingOptions);
-        foreach (Control control in new[] { systemAudio, systemAudioDevice, microphone, microphoneDevice, hardware, bitrate }) BindEnabled(control, native);
-        BindEnabled(twoPass, native, invert: true);
-        // GIF tasks continue to use the existing FFmpeg options even when MP4 recording is native.
+
         BoundValue<bool> fixedDuration = new(capture.ScreenRecordFixedDuration, value => capture.ScreenRecordFixedDuration = value);
         NumericUpDown duration = Number(() => (decimal)capture.ScreenRecordDuration, value => capture.ScreenRecordDuration = (float)value, 0, 86400, 0.1m);
         BindEnabled(duration, fixedDuration);
@@ -585,25 +560,21 @@ internal sealed class TaskSettingsPageBuilder
         BindEnabled(startDelay, startDelayEnabled);
 
         return Page("capture-screen-recorder", Strings.TaskSettingsWindow_ScreenRecorder, LucideIcons.video,
-            EnabledCard(_captureOverride, Strings.TaskSettingsWindow_NativeRecorder,
-                Check(Strings.TaskSettingsWindow_NativeRecorderEnabled, native),
-                showBar, systemAudio, systemAudioDevice, microphone, microphoneDevice, hardware, bitrate),
-            cameraPanel,
+            EnabledCard(_captureOverride, Strings.TaskSettingsWindow_NativeRecorderCamera, cameraContent),
             EnabledCard(_captureOverride, Strings.TaskSettingsWindow_Recording,
                 Row(Strings.TaskSettingsWindow_ScreenRecordingFPS, Number(() => capture.ScreenRecordFPS, value => capture.ScreenRecordFPS = (int)value, 1, 120)),
                 Row(Strings.TaskSettingsWindow_GIFFPS, Number(() => capture.GIFFPS, value => capture.GIFFPS = (int)value, 1, HelpersOptions.DevMode ? 60 : 30)),
                 Check(Strings.TaskSettingsWindow_ShowCursorInRecording, () => capture.ScreenRecordShowCursor, value => capture.ScreenRecordShowCursor = value),
-                Check(Strings.TaskSettingsWindow_HighlightMouseWhileRecording, () => capture.ScreenRecordMouseHighlighter, value => capture.ScreenRecordMouseHighlighter = value),
-                Button(Strings.TaskSettingsWindow_MouseHighlighterOptions, () => _window.NavigateToPage("tools-mouse-highlighter")),
                 Check(Strings.TaskSettingsWindow_ShowRecordingTimer, () => capture.ScreenRecordShowTimer, value => capture.ScreenRecordShowTimer = value),
                 Check(Strings.TaskSettingsWindow_ShowRecordingButtonLabels, () => capture.ScreenRecordShowButtonLabels, value => capture.ScreenRecordShowButtonLabels = value),
                 Check(Strings.TaskSettingsWindow_UseStartDelay, startDelayEnabled), Row(Strings.TaskSettingsWindow_StartDelaySeconds, startDelay),
                 Check(Strings.TaskSettingsWindow_UseFixedDuration, fixedDuration), Row(Strings.TaskSettingsWindow_DurationSeconds, duration)),
             EnabledCard(_captureOverride, Strings.TaskSettingsWindow_EncodingAndCapture,
-                twoPass,
+                Check(Strings.TaskSettingsWindow_RecordLosslesslyFirstThenApplyEncodingOptions, () => capture.ScreenRecordTwoPassEncoding, value => capture.ScreenRecordTwoPassEncoding = value),
                 Check(Strings.TaskSettingsWindow_AskForConfirmationWhenAborting, () => capture.ScreenRecordAskConfirmationOnAbort, value => capture.ScreenRecordAskConfirmationOnAbort = value),
-                legacyOptions));
+                Button(Strings.TaskSettingsWindow_ScreenRecordingOptionsWithEllipsis, ShowScreenRecordingOptions)));
     }
+
 
     private async Task ShowScreenRecordingOptions()
     {
@@ -623,11 +594,6 @@ internal sealed class TaskSettingsPageBuilder
         await window.ShowDialog(_window);
         capture.FFmpegOptions = window.Options.FFmpeg;
     }
-
-    private static ComboBox AudioDeviceCombo(Func<IReadOnlyList<AudioCaptureDevice>> getDevices,
-        Func<string> getSelectedId, Action<string> setSelectedId, string defaultLabel, string unavailableLabel)
-        => CaptureDeviceCombo(() => getDevices().Select(device => (device.Id, device.Name)).ToArray(),
-            getSelectedId, setSelectedId, defaultLabel, unavailableLabel);
 
     private static ComboBox CaptureDeviceCombo(Func<IReadOnlyList<(string Id, string Name)>> getDevices,
         Func<string> getSelectedId, Action<string> setSelectedId, string defaultLabel, string unavailableLabel, string? emptyLabel = null)
@@ -883,14 +849,7 @@ internal sealed class TaskSettingsPageBuilder
                 Check(Strings.TaskSettingsWindow_ShowMagnifier, () => picker.ShowMagnifier, value => picker.ShowMagnifier = value)));
     }
 
-    private Control BuildMouseHighlighterPage()
-    {
-        return Page("tools-mouse-highlighter", Strings.MouseHighlighter, LucideIcons.mouse_pointer_click,
-            EnabledCard(_toolsOverride, Strings.MouseHighlighter,
-                new MouseHighlighterSettingsControl(_toolsSettings.MouseHighlighterOptions)));
-    }
-
-    private Control BuildImageEditorPage()
+        private Control BuildImageEditorPage()
     {
         ImageEditorOptions options = _toolsSettings.ImageEditorOptions;
 

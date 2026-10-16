@@ -43,6 +43,16 @@ namespace ShareX.ScreenCaptureLib
         public Rectangle CaptureArea { get; set; }
         public float Duration { get; set; }
         public bool DrawCursor { get; set; }
+
+        /// <summary>
+        /// The part of the captured PipeWire stream to keep, in stream coordinates. The portal
+        /// hands over a whole monitor or window, so a user-selected region is cropped out here.
+        /// Null records the stream as it arrives.
+        /// </summary>
+        public Rectangle? StreamCrop { get; set; }
+
+        /// <summary>Webcam picture-in-picture settings for this recording.</summary>
+        public CameraOverlayOptions Camera { get; set; } = new CameraOverlayOptions();
         public FFmpegOptions FFmpeg { get; set; } = new FFmpegOptions();
 
         public string GetFFmpegCommands()
@@ -82,12 +92,8 @@ namespace ShareX.ScreenCaptureLib
 
             if (IsRecording)
             {
-                // Audio is listed first so ffmpeg maps stream 0 to video when both are present.
-                if (FFmpeg.IsAudioSourceSelected)
-                {
-                    AppendPulseInput(args, FFmpeg.AudioSource);
-                }
-
+                // Input order is fixed so the filter graph can address streams by index:
+                // 0 is the screen, 1 is the camera when it is enabled, audio comes last.
                 if (FFmpeg.IsVideoSourceSelected)
                 {
                     if (FFmpeg.VideoSource.Equals(FFmpegCaptureDevice.PipeWire.Value, StringComparison.OrdinalIgnoreCase))
@@ -101,12 +107,27 @@ namespace ShareX.ScreenCaptureLib
                     }
                     else
                     {
-                        // Anything else is a V4L2 node, i.e. a webcam.
+                        // Anything else is a V4L2 node, i.e. a webcam used as the main picture.
                         args.Append("-f v4l2 ");
                         args.Append("-thread_queue_size 1024 ");
                         args.Append($"-framerate {framerate} ");
                         args.Append($"-i \"{FFmpeg.VideoSource}\" ");
                     }
+
+                    if (Camera.IsUsable)
+                    {
+                        (int cameraWidth, int cameraHeight) = Camera.GetCaptureSize();
+                        args.Append("-f v4l2 ");
+                        args.Append("-thread_queue_size 1024 ");
+                        args.Append($"-framerate {Camera.FPS} ");
+                        args.Append($"-video_size {cameraWidth}x{cameraHeight} ");
+                        args.Append($"-i \"{Camera.DevicePath}\" ");
+                    }
+                }
+
+                if (FFmpeg.IsAudioSourceSelected)
+                {
+                    AppendPulseInput(args, FFmpeg.AudioSource);
                 }
             }
             else
@@ -218,6 +239,19 @@ namespace ShareX.ScreenCaptureLib
                 }
             }
 
+            if (IsRecording && Camera.IsUsable)
+            {
+                AppendCameraOverlay(args);
+            }
+
+            if (IsRecording && !Camera.IsUsable && StreamCrop is { } crop && crop.Width > 0 && crop.Height > 0)
+            {
+                // Even dimensions keep the 4:2:0 encoders happy.
+                int width = crop.Width - (crop.Width & 1);
+                int height = crop.Height - (crop.Height & 1);
+                args.Append($"-vf crop={width}:{height}:{crop.X}:{crop.Y} ");
+            }
+
             if (FFmpeg.IsAudioSourceSelected)
             {
                 switch (FFmpeg.AudioCodec)
@@ -250,6 +284,83 @@ namespace ShareX.ScreenCaptureLib
 
             return args.ToString();
         }
+
+        /// <summary>
+        /// Builds the filter graph that composites the webcam over the recording and returns the
+        /// label of its output, so the caller can map it.
+        /// </summary>
+        /// <remarks>
+        /// Any crop is applied inside the graph, before the overlay, so the picture-in-picture is
+        /// positioned against what is actually kept. A circular overlay gets its alpha from geq
+        /// rather than from a mask image, which keeps the whole thing to one ffmpeg invocation.
+        /// </remarks>
+        private void AppendCameraOverlay(StringBuilder args)
+        {
+            Rectangle output = StreamCrop ?? CaptureArea;
+
+            if (output.Width <= 0 || output.Height <= 0) return;
+
+            int margin = Math.Max(0, Math.Min(Camera.Margin, (Math.Min(output.Width, output.Height) / 2) - 1));
+            int availableWidth = Math.Max(2, output.Width - (margin * 2));
+            int availableHeight = Math.Max(2, output.Height - (margin * 2));
+
+            (int captureWidth, int captureHeight) = Camera.GetCaptureSize();
+            double aspect = captureWidth / (double)captureHeight;
+            bool circle = Camera.Shape == CameraOverlayShape.Circle;
+
+            int width = Math.Clamp(output.Width * Camera.WidthPercent / 100, 2, availableWidth);
+            int height = circle ? width : Math.Max(2, (int)(width / aspect));
+
+            if (height > availableHeight)
+            {
+                height = availableHeight;
+                width = circle ? height : Math.Clamp((int)(height * aspect), 2, availableWidth);
+            }
+
+            // Even dimensions keep the 4:2:0 encoders happy.
+            width -= width & 1;
+            height -= height & 1;
+
+            string x = Camera.Position is CameraOverlayPosition.TopLeft or CameraOverlayPosition.BottomLeft
+                ? margin.ToString(CultureInfo.InvariantCulture)
+                : $"main_w-overlay_w-{margin.ToString(CultureInfo.InvariantCulture)}";
+            string y = Camera.Position is CameraOverlayPosition.TopLeft or CameraOverlayPosition.TopRight
+                ? margin.ToString(CultureInfo.InvariantCulture)
+                : $"main_h-overlay_h-{margin.ToString(CultureInfo.InvariantCulture)}";
+
+            StringBuilder filter = new StringBuilder();
+            filter.Append("[0:v]");
+
+            if (StreamCrop is Rectangle crop && crop.Width > 0 && crop.Height > 0)
+            {
+                int cropWidth = crop.Width - (crop.Width & 1);
+                int cropHeight = crop.Height - (crop.Height & 1);
+                filter.Append($"crop={cropWidth}:{cropHeight}:{crop.X}:{crop.Y},");
+            }
+
+            filter.Append("null[bg];");
+            filter.Append($"[1:v]scale={width}:{height}");
+
+            if (circle)
+            {
+                int radius = Math.Min(width, height) / 2;
+                filter.Append(",format=rgba");
+                filter.Append($",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(hypot(X-{width / 2},Y-{height / 2}),{radius}),255,0)'");
+            }
+
+            filter.Append("[cam];");
+            filter.Append($"[bg][cam]overlay={x}:{y}:format=auto,format=yuv420p[out]");
+
+            args.Append($"-filter_complex \"{filter}\" ");
+            args.Append("-map \"[out]\" ");
+
+            if (FFmpeg.IsAudioSourceSelected)
+            {
+                // Audio is the last input, after the screen and the camera.
+                args.Append("-map 2:a ");
+            }
+        }
+
 
         /// <summary>
         /// Appends a PulseAudio input. PipeWire serves the same protocol through pipewire-pulse,

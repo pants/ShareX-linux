@@ -1,4 +1,4 @@
-﻿#region License Information (GPL v3)
+#region License Information (GPL v3)
 
 /*
     ShareX - A program that allows you to take screenshots and share any file type
@@ -23,15 +23,25 @@
 
 #endregion License Information (GPL v3)
 
-using Microsoft.Win32;
-using ShareX.HelpersLib;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using ShareX.HelpersLib;
+using ShareX.Linux;
 
 namespace ShareX
 {
+    /// <summary>
+    /// Deployment policy an administrator can set for every user on the machine.
+    /// </summary>
+    /// <remarks>
+    /// These were registry values under HKLM/HKCU on Windows. The Linux equivalent is a plain
+    /// key=value file: /etc/sharex.conf for the machine, overridden per user by
+    /// $XDG_CONFIG_HOME/ShareX/policy.conf.
+    /// </remarks>
     public static class SystemOptions
     {
-        private const string RegistryPath = @"SOFTWARE\ShareX";
+        private const string SystemPolicyPath = "/etc/sharex.conf";
 
         public static bool DisableUpdateCheck { get; private set; }
         public static bool DisableUpload { get; private set; }
@@ -40,53 +50,49 @@ namespace ShareX
 
         public static void UpdateSystemOptions()
         {
-            DisableUpdateCheck = GetSystemOptionBoolean("DisableUpdateCheck");
-            DisableUpload = GetSystemOptionBoolean("DisableUpload");
-            DisableLogging = GetSystemOptionBoolean("DisableLogging");
-            PersonalPath = GetSystemOptionString("PersonalPath");
+            Dictionary<string, string> options = ReadPolicyFiles();
+
+            DisableUpdateCheck = GetBoolean(options, "DisableUpdateCheck");
+            DisableUpload = GetBoolean(options, "DisableUpload");
+            DisableLogging = GetBoolean(options, "DisableLogging");
+            PersonalPath = options.TryGetValue("PersonalPath", out string path) ? path : null;
         }
 
-        private static bool GetSystemOptionBoolean(string name)
+        private static Dictionary<string, string> ReadPolicyFiles()
         {
-            object value = RegistryHelpers.GetValue(RegistryPath, name, RegistryHive.LocalMachine);
+            Dictionary<string, string> options = new(StringComparer.OrdinalIgnoreCase);
 
-            if (value != null)
+            // The per-user file is read second so it wins.
+            foreach (string path in new[] { SystemPolicyPath, Path.Combine(LinuxEnvironment.ConfigHome, "ShareX", "policy.conf") })
             {
                 try
                 {
-                    return Convert.ToBoolean(value);
+                    if (!File.Exists(path)) continue;
+
+                    foreach (string line in File.ReadAllLines(path))
+                    {
+                        string entry = line.Trim();
+
+                        if (entry.Length == 0 || entry[0] is '#' or ';') continue;
+
+                        int separator = entry.IndexOf('=');
+
+                        if (separator <= 0) continue;
+
+                        options[entry[..separator].Trim()] = entry[(separator + 1)..].Trim();
+                    }
                 }
-                catch
+                catch (Exception e)
                 {
+                    DebugHelper.WriteException(e, $"Reading the policy file \"{path}\" failed.");
                 }
             }
 
-            value = RegistryHelpers.GetValue(RegistryPath, name, RegistryHive.CurrentUser);
-
-            if (value != null)
-            {
-                try
-                {
-                    return Convert.ToBoolean(value);
-                }
-                catch
-                {
-                }
-            }
-
-            return false;
+            return options;
         }
 
-        private static string GetSystemOptionString(string name)
-        {
-            string value = RegistryHelpers.GetValueString(RegistryPath, name, RegistryHive.LocalMachine);
-
-            if (value == null)
-            {
-                value = RegistryHelpers.GetValueString(RegistryPath, name, RegistryHive.CurrentUser);
-            }
-
-            return value;
-        }
+        private static bool GetBoolean(Dictionary<string, string> options, string name) =>
+            options.TryGetValue(name, out string value) &&
+            (value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1");
     }
 }

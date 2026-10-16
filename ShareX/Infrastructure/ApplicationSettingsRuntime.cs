@@ -103,7 +103,6 @@ internal static class ApplicationSettingsRuntime
         try
         {
             TaskManager.RecentManager.InitItems();
-            TaskbarManager.Enabled = ApplicationState.Settings.TaskbarProgressEnabled;
 
             ApplyCore(refreshMenus: false);
             await hotkeyHost.UpdateHotkeysAsync();

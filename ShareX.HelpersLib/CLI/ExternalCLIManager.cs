@@ -27,6 +27,9 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using ShareX.Linux.Interop;
 
 namespace ShareX.HelpersLib
 {
@@ -37,7 +40,16 @@ namespace ShareX.HelpersLib
 
         public bool IsProcessRunning { get; private set; }
 
+        /// <summary>
+        /// Data to feed the process on its standard input, used to pipe captured video into
+        /// ffmpeg. While this is set, standard input belongs to the pipe, so the process has to
+        /// be asked to stop with a signal rather than by typing a command at it.
+        /// </summary>
+        public Func<Stream> StandardInputProvider { get; set; }
+
         protected Process process;
+
+        private CancellationTokenSource inputCancellation;
 
         public virtual int Open(string path, string args = null)
         {
@@ -70,6 +82,8 @@ namespace ShareX.HelpersLib
                     if (psi.RedirectStandardOutput) process.BeginOutputReadLine();
                     if (psi.RedirectStandardError) process.BeginErrorReadLine();
 
+                    Task inputPump = StartInputPump();
+
                     try
                     {
                         IsProcessRunning = true;
@@ -78,6 +92,7 @@ namespace ShareX.HelpersLib
                     finally
                     {
                         IsProcessRunning = false;
+                        StopInputPump(inputPump);
                     }
 
                     return process.ExitCode;
@@ -100,6 +115,83 @@ namespace ShareX.HelpersLib
             if (e.Data != null)
             {
                 ErrorDataReceived?.Invoke(sender, e);
+            }
+        }
+
+        /// <summary>Copies <see cref="StandardInputProvider"/> into the process until either end closes.</summary>
+        private Task StartInputPump()
+        {
+            Func<Stream> provider = StandardInputProvider;
+
+            if (provider == null) return null;
+
+            Stream source = provider();
+
+            if (source == null) return null;
+
+            inputCancellation = new CancellationTokenSource();
+            CancellationToken token = inputCancellation.Token;
+            Stream destination = process.StandardInput.BaseStream;
+
+            return Task.Run(async () =>
+            {
+                try
+                {
+                    await source.CopyToAsync(destination, token);
+                    await destination.FlushAsync(token);
+                }
+                catch (Exception exception) when (exception is OperationCanceledException or IOException
+                    or ObjectDisposedException)
+                {
+                    // Expected: the recording was stopped, or the encoder exited first.
+                }
+                catch (Exception exception)
+                {
+                    DebugHelper.WriteException(exception, "Feeding captured video to the encoder failed.");
+                }
+                finally
+                {
+                    try { destination.Close(); } catch { /* the encoder already closed it */ }
+                }
+            }, token);
+        }
+
+        private void StopInputPump(Task inputPump)
+        {
+            if (inputPump == null) return;
+
+            try
+            {
+                inputCancellation?.Cancel();
+                inputPump.Wait(TimeSpan.FromSeconds(5));
+            }
+            catch (Exception exception)
+            {
+                DebugHelper.WriteException(exception, "Stopping the encoder input pump failed.");
+            }
+            finally
+            {
+                inputCancellation?.Dispose();
+                inputCancellation = null;
+            }
+        }
+
+        /// <summary>
+        /// Asks the process to finish the way a user pressing Ctrl+C would. ffmpeg responds by
+        /// flushing and closing the output file, which a kill would not do.
+        /// </summary>
+        public bool Interrupt()
+        {
+            if (!IsProcessRunning || process == null) return false;
+
+            try
+            {
+                return LibC.SendSignal(process.Id, LibC.SIGINT) == 0;
+            }
+            catch (Exception exception)
+            {
+                DebugHelper.WriteException(exception, "Interrupting the external process failed.");
+                return false;
             }
         }
 

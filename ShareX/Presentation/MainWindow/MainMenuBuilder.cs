@@ -124,7 +124,9 @@ internal sealed class MainMenuBuilder
         return new List<MainMenuEntry>
         {
             Item(Strings.MainMenuBuilder_Fullscreen, LucideIcons.maximize, () => new CaptureFullscreen().Capture(autoHide)),
-            Parent(Strings.MainMenuBuilder_Window, LucideIcons.app_window, BuildWindowMenu),
+            // Wayland keeps other applications' windows private, so ShareX cannot list them;
+            // the compositor's own picker asks the user which window to capture.
+            Item(Strings.MainMenuBuilder_Window, LucideIcons.app_window, () => new CaptureWindow().Capture(!_trayMenu)),
             Parent(Strings.MainMenuBuilder_Monitor, LucideIcons.monitor, BuildMonitorMenu),
             Item(Strings.MainMenuBuilder_Region, LucideIcons.scan, () => new CaptureRegion().Capture(autoHide)),
             Item(Strings.MainMenuBuilder_LastRegion, LucideIcons.layers, () => new CaptureLastRegion().Capture(autoHide)),
@@ -132,7 +134,6 @@ internal sealed class MainMenuBuilder
                 () => TaskHelpers.StartScreenRecording(ScreenRecordOutput.FFmpeg, ScreenRecordStartMethod.Region)),
             Item(Strings.MainMenuBuilder_ScreenRecordingGif, LucideIcons.film,
                 () => TaskHelpers.StartScreenRecording(ScreenRecordOutput.GIF, ScreenRecordStartMethod.Region)),
-            Item(Strings.MainMenuBuilder_ScrollingCapture, LucideIcons.scroll_text, async () => await TaskHelpers.OpenScrollingCapture()),
             Item(Strings.MainMenuBuilder_AutoCapture, LucideIcons.clock, () => TaskHelpers.OpenAutoCapture()),
             MainMenuEntry.Separator(),
             new MainMenuEntry(Strings.MainMenuBuilder_ShowCursor, LucideIcons.mouse_pointer_2,
@@ -142,48 +143,6 @@ internal sealed class MainMenuBuilder
             Parent(string.Format(Strings.ScreenshotDelay0S, ApplicationState.DefaultTaskSettings.CaptureSettings.ScreenshotDelay.ToString("0.#")),
                 LucideIcons.timer, BuildScreenshotDelayMenu)
         };
-    }
-
-    private IReadOnlyList<MainMenuEntry> BuildWindowMenu()
-    {
-        List<MainMenuEntry> items = new();
-
-        try
-        {
-            foreach (WindowInfo window in new WindowsList().GetVisibleWindowsList())
-            {
-                WindowInfo selectedWindow = window;
-                string title = selectedWindow.Text.Truncate(50, "...");
-                items.Add(Item(title, string.Empty,
-                    () => new CaptureWindow(selectedWindow.Handle).Capture(!_trayMenu),
-                    bitmapIcon: GetWindowIcon(selectedWindow)));
-            }
-        }
-        catch (Exception e)
-        {
-            DebugHelper.WriteException(e);
-        }
-
-        if (items.Count == 0)
-        {
-            items.Add(new MainMenuEntry(Strings.MainMenuBuilder_NoWindowsFound, LucideIcons.app_window, isEnabled: false));
-        }
-
-        return items;
-    }
-
-    private static byte[]? GetWindowIcon(WindowInfo window)
-    {
-        using Icon? icon = window.Icon;
-        if (icon == null)
-        {
-            return null;
-        }
-
-        using Bitmap bitmap = WindowsImageInterop.FromIcon(icon.Handle);
-        using MemoryStream stream = new();
-        bitmap.Save(stream, ImageFormat.Png);
-        return stream.ToArray();
     }
 
     private IReadOnlyList<MainMenuEntry> BuildMonitorMenu()
@@ -251,7 +210,6 @@ internal sealed class MainMenuBuilder
         new(Strings.MainMenuBuilder_ToolCategoryScreen,
         [
             Tool(nameof(Strings.MainMenuBuilder_ColorPicker), Strings.MainMenuBuilder_ColorPicker, LucideIcons.palette, () => TaskHelpers.ShowColorPickerDialog()),
-            Tool(nameof(Strings.MainMenuBuilder_MouseHighlighter), Strings.MainMenuBuilder_MouseHighlighter, LucideIcons.mouse_pointer_click, () => TaskHelpers.OpenMouseHighlighter()),
             Tool(nameof(Strings.MainMenuBuilder_PinToScreenDialog), Strings.MainMenuBuilder_PinToScreenDialog, LucideIcons.pin, () => TaskHelpers.PinToScreen()),
             Tool(nameof(Strings.MainMenuBuilder_Ruler), Strings.MainMenuBuilder_Ruler, LucideIcons.ruler, () => TaskHelpers.OpenRuler()),
             Tool(nameof(Strings.MainMenuBuilder_ScreenColorPicker), Strings.MainMenuBuilder_ScreenColorPicker, LucideIcons.pipette, () => TaskHelpers.OpenScreenColorPicker())
@@ -290,14 +248,6 @@ internal sealed class MainMenuBuilder
             Tool(nameof(Strings.MainMenuBuilder_OCR), Strings.MainMenuBuilder_OCR, LucideIcons.scan_text, async () => await TaskHelpers.OCRImage()),
             Tool(nameof(Strings.MainMenuBuilder_QRCode), Strings.MainMenuBuilder_QRCode, LucideIcons.qr_code, () => TaskHelpers.OpenQRCode()),
             Tool(nameof(Strings.MainMenuBuilder_RemoteStorageBrowser), Strings.MainMenuBuilder_RemoteStorageBrowser, LucideIcons.cloud, () => TaskHelpers.OpenRemoteStorageBrowser())
-        ]),
-        new(Strings.MainMenuBuilder_ToolCategorySystem,
-        [
-            Tool(nameof(Strings.MainMenuBuilder_BorderlessWindow), Strings.MainMenuBuilder_BorderlessWindow, LucideIcons.frame, () => TaskHelpers.OpenBorderlessWindow()),
-            Tool(nameof(Strings.MainMenuBuilder_ClipboardViewer), Strings.MainMenuBuilder_ClipboardViewer, LucideIcons.clipboard_list, () => TaskHelpers.OpenClipboardViewer()),
-            Tool(nameof(Strings.MainMenuBuilder_InspectWindow), Strings.MainMenuBuilder_InspectWindow, LucideIcons.scan_search, () => TaskHelpers.OpenInspectWindow()),
-            Tool(nameof(Strings.MainMenuBuilder_MonitorTest), Strings.MainMenuBuilder_MonitorTest, LucideIcons.monitor, () => TaskHelpers.OpenMonitorTest()),
-            Tool(nameof(Strings.MainMenuBuilder_NetworkMonitor), Strings.MainMenuBuilder_NetworkMonitor, LucideIcons.activity, () => TaskHelpers.OpenNetworkMonitor())
         ])
     ];
 

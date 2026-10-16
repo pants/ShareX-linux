@@ -342,13 +342,11 @@ namespace ShareX
                 string title = string.Format("{0} - {1:0.0}%", ApplicationInfo.Title, averageProgress);
                 MainWindowIntegration.SetTitle(title);
                 UpdateTrayIcon((int)averageProgress);
-                TaskbarManager.SetProgressValue((int)averageProgress);
             }
             else
             {
                 MainWindowIntegration.SetTitle(ApplicationInfo.Title);
                 UpdateTrayIcon();
-                TaskbarManager.SetProgressState(TaskbarProgressBarStatus.NoProgress);
             }
         }
 

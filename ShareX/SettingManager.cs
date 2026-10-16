@@ -256,7 +256,6 @@ namespace ShareX
 
             if (Settings.IsUpgradeFrom("15.0.1"))
             {
-                DefaultTaskSettings.CaptureSettings.ScrollingCaptureOptions = new ScrollingCaptureOptions();
                 DefaultTaskSettings.CaptureSettings.FFmpegOptions.FixSources();
             }
 
@@ -346,7 +345,6 @@ namespace ShareX
                 {
                     if (taskSettings != null && taskSettings.CaptureSettings != null)
                     {
-                        taskSettings.CaptureSettings.ScrollingCaptureOptions = new ScrollingCaptureOptions();
                         taskSettings.CaptureSettings.FFmpegOptions.FixSources();
                     }
                 }

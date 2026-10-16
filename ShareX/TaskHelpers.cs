@@ -135,13 +135,12 @@ namespace ShareX
                     new CaptureCustomRegion().Capture(safeTaskSettings);
                     break;
                 case HotkeyType.CustomWindow:
-                    new CaptureCustomWindow().Capture(safeTaskSettings);
+                    // There is no way to name a window on Wayland, so this falls back to the
+                    // compositor's own window picker.
+                    new CaptureWindow().Capture(safeTaskSettings);
                     break;
                 case HotkeyType.LastRegion:
                     new CaptureLastRegion().Capture(safeTaskSettings);
-                    break;
-                case HotkeyType.ScrollingCapture:
-                    await OpenScrollingCapture(safeTaskSettings);
                     break;
                 case HotkeyType.AutoCapture:
                     OpenAutoCapture(safeTaskSettings);
@@ -195,9 +194,6 @@ namespace ShareX
                     break;
                 case HotkeyType.Ruler:
                     OpenRuler(safeTaskSettings);
-                    break;
-                case HotkeyType.MouseHighlighter:
-                    MouseHighlighterManager.Toggle(safeTaskSettings.ToolsSettingsReference.MouseHighlighterOptions);
                     break;
                 case HotkeyType.PinToScreen:
                     if (!string.IsNullOrEmpty(filePath))
@@ -362,28 +358,6 @@ namespace ShareX
                 case HotkeyType.IndexFolder:
                     UploadManager.IndexFolder();
                     break;
-                case HotkeyType.ClipboardViewer:
-                    OpenClipboardViewer();
-                    break;
-                case HotkeyType.BorderlessWindow:
-                    OpenBorderlessWindow(safeTaskSettings);
-                    break;
-                case HotkeyType.ActiveWindowBorderless:
-                    MakeActiveWindowBorderless(safeTaskSettings);
-                    break;
-                case HotkeyType.ActiveWindowTopMost:
-                    MakeActiveWindowTopMost(safeTaskSettings);
-                    break;
-                case HotkeyType.InspectWindow:
-                    OpenInspectWindow();
-                    break;
-                case HotkeyType.NetworkMonitor:
-                    OpenNetworkMonitor();
-                    break;
-                case HotkeyType.MonitorTest:
-                    OpenMonitorTest();
-                    break;
-                // Other
                 case HotkeyType.DisableHotkeys:
                     ToggleHotkeys(safeTaskSettings);
                     break;
@@ -754,7 +728,7 @@ namespace ShareX
             {
                 try
                 {
-                    string filePath = RegistryHelpers.SearchProgramPath(fileName);
+                    string filePath = ShareX.Linux.LinuxEnvironment.FindExecutable(fileName);
 
                     if (!string.IsNullOrEmpty(filePath))
                     {
@@ -829,16 +803,7 @@ namespace ShareX
             ScreenRecordManager.AbortRecording();
         }
 
-        public static async Task OpenScrollingCapture(TaskSettings taskSettings = null)
-        {
-            if (taskSettings == null) taskSettings = TaskSettings.GetDefaultTaskSettings();
-
-            await ScrollingCaptureWindowIntegration.StartStopAsync(taskSettings.CaptureSettingsReference.ScrollingCaptureOptions,
-                img => UploadManager.RunImageTask(img, taskSettings),
-                () => PlayNotificationSoundAsync(NotificationSound.ActionCompleted, taskSettings));
-        }
-
-        public static void OpenAutoCapture(TaskSettings taskSettings = null)
+                public static void OpenAutoCapture(TaskSettings taskSettings = null)
         {
             if (taskSettings == null) taskSettings = TaskSettings.GetDefaultTaskSettings();
 
@@ -1261,72 +1226,7 @@ namespace ShareX
                 });
         }
 
-        public static void OpenBorderlessWindow(TaskSettings taskSettings = null)
-        {
-            if (taskSettings == null) taskSettings = TaskSettings.GetDefaultTaskSettings();
-
-            BorderlessWindowSettings settings = taskSettings.ToolsSettingsReference.BorderlessWindowSettings;
-
-            ToolsIntegration.ShowBorderlessWindow(
-                settings,
-                BorderlessWindowManager.ToggleBorderlessWindow,
-                playNotificationSound: () => PlayNotificationSoundAsync(NotificationSound.ActionCompleted, taskSettings));
-        }
-
-        public static void MakeActiveWindowBorderless(TaskSettings taskSettings = null)
-        {
-            if (taskSettings == null) taskSettings = TaskSettings.GetDefaultTaskSettings();
-
-            try
-            {
-                IntPtr handle = NativeMethods.GetForegroundWindow();
-
-                if (handle.ToInt32() > 0)
-                {
-                    BorderlessWindowManager.ToggleBorderlessWindow(handle, taskSettings.ToolsSettings.BorderlessWindowSettings.ExcludeTaskbarArea);
-
-                    PlayNotificationSoundAsync(NotificationSound.ActionCompleted, taskSettings);
-                }
-            }
-            catch (Exception e)
-            {
-                e.ShowError();
-            }
-        }
-
-        public static void MakeActiveWindowTopMost(TaskSettings taskSettings = null)
-        {
-            if (taskSettings == null) taskSettings = TaskSettings.GetDefaultTaskSettings();
-
-            try
-            {
-                IntPtr handle = NativeMethods.GetForegroundWindow();
-
-                if (handle.ToInt32() > 0)
-                {
-                    WindowInfo windowInfo = new WindowInfo(handle);
-                    windowInfo.TopMost = !windowInfo.TopMost;
-
-                    PlayNotificationSoundAsync(NotificationSound.ActionCompleted, taskSettings);
-                }
-            }
-            catch (Exception e)
-            {
-                e.ShowError();
-            }
-        }
-
-        public static void OpenInspectWindow()
-        {
-            ToolsIntegration.ShowInspectWindowWindow();
-        }
-
-        public static void OpenClipboardViewer()
-        {
-            ToolsIntegration.ShowClipboardViewerWindow();
-        }
-
-        public static void OpenImageEditor(TaskSettings taskSettings = null)
+                                                public static void OpenImageEditor(TaskSettings taskSettings = null)
         {
             if (taskSettings == null) taskSettings = TaskSettings.GetDefaultTaskSettings();
 
@@ -1626,25 +1526,7 @@ namespace ShareX
             }
         }
 
-        public static void OpenMonitorTest()
-        {
-            ToolsIntegration.ShowMonitorTestWindow();
-        }
-
-        public static void OpenNetworkMonitor()
-        {
-            string logFilePath = AppPaths.LogsFilePath != null
-                ? Path.Combine(AppPaths.LogsFolder, "NetworkMonitor.log")
-                : null;
-            ToolsIntegration.ShowNetworkMonitorWindow(new NetworkMonitorServices
-            {
-                LogFilePath = logFilePath,
-                CopyText = text => ClipboardHelpers.CopyText(text),
-                OpenFile = path => FileHelpers.OpenFile(path)
-            });
-        }
-
-        public static void OpenRemoteStorageBrowser()
+                        public static void OpenRemoteStorageBrowser()
         {
             SettingManager.WaitUploadersConfig();
 
@@ -1815,14 +1697,7 @@ namespace ShareX
             ToolsIntegration.ShowRulerWindow();
         }
 
-        public static void OpenMouseHighlighter(TaskSettings taskSettings = null)
-        {
-            taskSettings ??= ApplicationState.DefaultTaskSettings;
-            ToolsIntegration.ShowMouseHighlighterWindow(taskSettings.ToolsSettingsReference.MouseHighlighterOptions,
-                () => SettingManager.SaveApplicationConfigAsync());
-        }
-
-        public static Task<UploadResult> SearchImageUsingGoogleLensAsync(string url)
+                public static Task<UploadResult> SearchImageUsingGoogleLensAsync(string url)
         {
             return new GoogleLensSharingService().CreateSharer(null, null).ShareURLAsync(url);
         }

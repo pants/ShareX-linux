@@ -108,7 +108,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         TitleBarIcon = CreateTitleBarIcon();
         DataContext = this;
 
-        _trayIconService.RightButtonDown += OnTrayIconRightButtonDown;
         _trayIconService.RightButtonUp += OnTrayIconRightButtonUp;
 
         BuildNavigation();
@@ -1964,19 +1963,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private void OnTrayIconRightButtonDown()
-    {
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (!_disposed)
-            {
-                CloseActiveContextMenu();
-                CloseTrayMenuAnchor();
-            }
-        });
-    }
-
-    private void OnTrayIconRightButtonUp()
+        private void OnTrayIconRightButtonUp()
     {
         Dispatcher.UIThread.Post(() =>
         {
@@ -2068,7 +2055,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ResetThumbnailDrag();
         CloseActiveContextMenu();
         CloseTrayMenuAnchor();
-        _trayIconService.RightButtonDown -= OnTrayIconRightButtonDown;
         _trayIconService.RightButtonUp -= OnTrayIconRightButtonUp;
         _trayIconService.Visible = false;
         TitleBarIcon.Dispose();

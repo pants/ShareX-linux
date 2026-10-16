@@ -1,4 +1,4 @@
-﻿#region License Information (GPL v3)
+#region License Information (GPL v3)
 
 /*
     ShareX - A program that allows you to take screenshots and share any file type
@@ -25,22 +25,14 @@
 
 namespace ShareX
 {
-    public class CaptureActiveWindow : CaptureBase
+    /// <summary>
+    /// Captures the window the user is working in.
+    /// </summary>
+    /// <remarks>
+    /// There is no way for a Wayland client to ask which window has focus, so "active window"
+    /// becomes the same compositor-driven picker as <see cref="CaptureWindow"/>.
+    /// </remarks>
+    public class CaptureActiveWindow : CaptureWindow
     {
-        protected override TaskMetadata Execute(TaskSettings taskSettings)
-        {
-            TaskMetadata metadata = CreateMetadata();
-
-            if (taskSettings.CaptureSettings.CaptureTransparent && !taskSettings.CaptureSettings.CaptureClientArea)
-            {
-                metadata.Image = TaskHelpers.GetScreenshot(taskSettings).CaptureActiveWindowTransparent();
-            }
-            else
-            {
-                metadata.Image = TaskHelpers.GetScreenshot(taskSettings).CaptureActiveWindow();
-            }
-
-            return metadata;
-        }
     }
 }

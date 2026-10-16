@@ -1,0 +1,14 @@
+<Solution>
+  <Project Path="ShareX.Avalonia/ShareX.Avalonia.csproj" />
+  <Project Path="ShareX.HelpersLib/ShareX.HelpersLib.csproj" />
+  <Project Path="ShareX.HistoryLib/ShareX.HistoryLib.csproj" />
+  <Project Path="ShareX.ImageEditor.App/ShareX.ImageEditor.App.csproj" />
+  <Project Path="ShareX.ImageEditor/ShareX.ImageEditor.csproj" />
+  <Project Path="ShareX.ImageEffectsLib/ShareX.ImageEffectsLib.csproj" />
+  <Project Path="ShareX.Linux/ShareX.Linux.csproj" />
+  <Project Path="ShareX.NativeMessagingHost/ShareX.NativeMessagingHost.csproj" />
+  <Project Path="ShareX.ScreenCaptureLib/ShareX.ScreenCaptureLib.csproj" />
+  <Project Path="ShareX.Tools/ShareX.Tools.csproj" />
+  <Project Path="ShareX.UploadersLib/ShareX.UploadersLib.csproj" />
+  <Project Path="ShareX/ShareX.csproj" />
+</Solution>

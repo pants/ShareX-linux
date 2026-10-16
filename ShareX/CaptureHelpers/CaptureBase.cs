@@ -80,15 +80,10 @@ namespace ShareX
         private async Task CaptureInternalAsync(TaskSettings taskSettings, bool autoHideForm)
         {
             bool wait = false;
-            bool showDesktopIcons = false;
             bool showMainForm = false;
 
-            if (taskSettings.CaptureSettings.CaptureAutoHideDesktopIcons && !CaptureHelpers.IsActiveWindowFullscreen() && DesktopIconManager.AreDesktopIconsVisible())
-            {
-                DesktopIconManager.SetDesktopIconsVisibility(false);
-                showDesktopIcons = true;
-                wait = true;
-            }
+            // Hiding desktop icons before a capture is a shell-specific trick with no portable
+            // equivalent: each Linux desktop stores that preference its own way, if at all.
 
             if (autoHideForm && AllowAutoHideForm)
             {
@@ -115,11 +110,6 @@ namespace ShareX
             }
             finally
             {
-                if (showDesktopIcons)
-                {
-                    DesktopIconManager.SetDesktopIconsVisibility(true);
-                }
-
                 if (showMainForm)
                 {
                     MainWindowIntegration.Activate();
@@ -160,20 +150,18 @@ namespace ShareX
             return CreateMetadata(insideRect, "explorer");
         }
 
+        /// <summary>
+        /// Builds the metadata for a capture.
+        /// </summary>
+        /// <remarks>
+        /// On Windows this recorded which window was in front at the moment of capture, feeding
+        /// the %pn and %t filename patterns. Wayland gives a client no way to look at another
+        /// application's windows, so the metadata is left empty and those patterns fall back to
+        /// their defaults.
+        /// </remarks>
         protected TaskMetadata CreateMetadata(Rectangle insideRect, string ignoreProcess)
         {
-            TaskMetadata metadata = new TaskMetadata();
-
-            IntPtr handle = NativeMethods.GetForegroundWindow();
-            WindowInfo windowInfo = new WindowInfo(handle);
-
-            if ((ignoreProcess == null || !windowInfo.ProcessName.Equals(ignoreProcess, StringComparison.OrdinalIgnoreCase)) &&
-                (insideRect.IsEmpty || windowInfo.Rectangle.Contains(insideRect)))
-            {
-                metadata.UpdateInfo(windowInfo);
-            }
-
-            return metadata;
+            return new TaskMetadata();
         }
     }
 }

@@ -60,12 +60,8 @@ public sealed class ApplicationSettingsViewModel : INotifyPropertyChanged, IDisp
     private bool _startWithWindows;
     private bool _startWithWindowsEnabled;
     private string _startWithWindowsText = string.Empty;
-    private bool _shellContextMenu;
-    private bool _editWithShareX;
-    private bool _sendToMenu;
     private bool _chromeExtensionSupport;
     private bool _firefoxAddonSupport;
-    private bool _steamShowInApp;
     private bool _exportSettings = true;
     private bool _exportHistory = true;
     private bool _personalPathDirty;
@@ -212,14 +208,16 @@ public sealed class ApplicationSettingsViewModel : INotifyPropertyChanged, IDisp
         get => Settings.TaskbarProgressEnabled;
         set
         {
-            if (SetSetting(Settings.TaskbarProgressEnabled, value, x => Settings.TaskbarProgressEnabled = x))
-            {
-                TaskbarManager.Enabled = value;
-            }
+            SetSetting(Settings.TaskbarProgressEnabled, value, x => Settings.TaskbarProgressEnabled = x);
         }
     }
 
-    public bool TaskbarProgressSupported => TaskbarManager.IsPlatformSupported;
+    /// <summary>
+    /// Progress on the launcher icon has no freedesktop standard: the Unity LauncherEntry
+    /// interface that some panels understand is a desktop-specific extension, so the option is
+    /// hidden rather than silently doing nothing.
+    /// </summary>
+    public bool TaskbarProgressSupported => false;
 
     public bool UseWhiteShareXIcon
     {
@@ -354,42 +352,6 @@ public sealed class ApplicationSettingsViewModel : INotifyPropertyChanged, IDisp
     public bool StartWithWindowsEnabled { get => _startWithWindowsEnabled; private set => SetField(ref _startWithWindowsEnabled, value); }
     public string StartWithWindowsText { get => _startWithWindowsText; private set => SetField(ref _startWithWindowsText, value); }
 
-    public bool ShellContextMenu
-    {
-        get => _shellContextMenu;
-        set
-        {
-            if (SetField(ref _shellContextMenu, value))
-            {
-                InvokeOnMainThread(() => IntegrationHelpers.CreateShellContextMenuButton(value));
-            }
-        }
-    }
-
-    public bool EditWithShareX
-    {
-        get => _editWithShareX;
-        set
-        {
-            if (SetField(ref _editWithShareX, value))
-            {
-                InvokeOnMainThread(() => IntegrationHelpers.CreateEditShellContextMenuButton(value));
-            }
-        }
-    }
-
-    public bool SendToMenu
-    {
-        get => _sendToMenu;
-        set
-        {
-            if (SetField(ref _sendToMenu, value))
-            {
-                InvokeOnMainThread(() => IntegrationHelpers.CreateSendToMenuButton(value));
-            }
-        }
-    }
-
     public bool ChromeExtensionSupport
     {
         get => _chromeExtensionSupport;
@@ -410,18 +372,6 @@ public sealed class ApplicationSettingsViewModel : INotifyPropertyChanged, IDisp
             if (SetField(ref _firefoxAddonSupport, value))
             {
                 InvokeOnMainThread(() => IntegrationHelpers.CreateFirefoxAddonSupport(value));
-            }
-        }
-    }
-
-    public bool SteamShowInApp
-    {
-        get => _steamShowInApp;
-        set
-        {
-            if (SetField(ref _steamShowInApp, value))
-            {
-                InvokeOnMainThread(() => IntegrationHelpers.SteamShowInApp(value));
             }
         }
     }
@@ -895,14 +845,8 @@ public sealed class ApplicationSettingsViewModel : INotifyPropertyChanged, IDisp
     private void RefreshIntegrations()
     {
 #if !MicrosoftStore
-        _shellContextMenu = IntegrationHelpers.CheckShellContextMenuButton();
-        _editWithShareX = IntegrationHelpers.CheckEditShellContextMenuButton();
-        _sendToMenu = IntegrationHelpers.CheckSendToMenuButton();
         _chromeExtensionSupport = IntegrationHelpers.CheckChromeExtensionSupport();
         _firefoxAddonSupport = IntegrationHelpers.CheckFirefoxAddonSupport();
-#endif
-#if STEAM
-        _steamShowInApp = IntegrationHelpers.CheckSteamShowInApp();
 #endif
     }
 

@@ -70,7 +70,6 @@ internal static class ApplicationLifecycle
         }
 
         Interlocked.Exchange(ref _exitStarted, 1);
-        ShareX.Tools.MouseHighlighterManager.Shutdown();
         MainWindowIntegration.Close();
         TaskManager.StopAllTasks();
         AvaloniaBootstrapper.Shutdown();

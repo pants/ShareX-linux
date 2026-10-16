@@ -1,4 +1,4 @@
-﻿#region License Information (GPL v3)
+#region License Information (GPL v3)
 
 /*
     ShareX - A program that allows you to take screenshots and share any file type
@@ -23,86 +23,88 @@
 
 #endregion License Information (GPL v3)
 
-using Microsoft.Win32;
-using ShareX.HelpersLib;
 using System;
-
-#if MicrosoftStore
-using Windows.ApplicationModel;
-#endif
+using System.IO;
+using ShareX.HelpersLib;
+using ShareX.Linux;
 
 namespace ShareX
 {
+    /// <summary>
+    /// Starting ShareX when the user logs in, through the freedesktop autostart specification:
+    /// a desktop entry in the autostart directory, which every desktop environment honours.
+    /// </summary>
     public static class StartupManager
     {
-#if MicrosoftStore
-        private const int StartupTargetIndex = 0;
-        private static readonly StartupTask packageTask = StartupTask.GetForCurrentPackageAsync().GetAwaiter().GetResult()[StartupTargetIndex];
-#endif
+        private static string AutostartFilePath =>
+            Path.Combine(LinuxEnvironment.AutostartDirectory, "com.getsharex.ShareX-autostart.desktop");
 
-        public static string StartupTargetPath
-        {
-            get
-            {
-#if STEAM
-                return FileHelpers.GetAbsolutePath("../ShareX_Launcher.exe");
-#else
-                return Environment.ProcessPath;
-#endif
-            }
-        }
+        public static string StartupTargetPath => Environment.ProcessPath;
 
         public static StartupState State
         {
             get
             {
-#if MicrosoftStore
-                return (StartupState)packageTask.State;
-#else
-                if (ShortcutHelpers.CheckShortcut(Environment.SpecialFolder.Startup, "ShareX", StartupTargetPath))
+                try
                 {
-                    if (Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder",
-                        "ShareX.lnk", null) is byte[] status && status.Length > 0 && status[0] == 3)
+                    if (!File.Exists(AutostartFilePath)) return StartupState.Disabled;
+
+                    // Desktops mark an entry the user switched off in their own settings with
+                    // X-GNOME-Autostart-enabled=false rather than deleting it.
+                    foreach (string line in File.ReadLines(AutostartFilePath))
                     {
-                        return StartupState.DisabledByUser;
+                        if (line.StartsWith("X-GNOME-Autostart-enabled=", StringComparison.OrdinalIgnoreCase) &&
+                            line.EndsWith("false", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return StartupState.DisabledByUser;
+                        }
                     }
-                    else
-                    {
-                        return StartupState.Enabled;
-                    }
+
+                    return StartupState.Enabled;
                 }
-                else
+                catch (Exception e)
                 {
+                    DebugHelper.WriteException(e);
                     return StartupState.Disabled;
                 }
-#endif
             }
             set
             {
-#if MicrosoftStore
-                if (value == StartupState.Enabled)
-                {
-                    packageTask.RequestEnableAsync().GetAwaiter().GetResult();
-                }
-                else if (value == StartupState.Disabled)
-                {
-                    packageTask.Disable();
-                }
-                else
+                if (value != StartupState.Enabled && value != StartupState.Disabled)
                 {
                     throw new NotSupportedException();
                 }
-#else
-                if (value == StartupState.Enabled || value == StartupState.Disabled)
+
+                try
                 {
-                    ShortcutHelpers.SetShortcut(value == StartupState.Enabled, Environment.SpecialFolder.Startup, "ShareX", StartupTargetPath, "-silent");
+                    if (value == StartupState.Enabled)
+                    {
+                        Directory.CreateDirectory(LinuxEnvironment.AutostartDirectory);
+                        File.WriteAllText(AutostartFilePath, BuildDesktopEntry());
+                    }
+                    else if (File.Exists(AutostartFilePath))
+                    {
+                        File.Delete(AutostartFilePath);
+                    }
                 }
-                else
+                catch (Exception e)
                 {
-                    throw new NotSupportedException();
+                    DebugHelper.WriteException(e);
                 }
-#endif
             }
         }
+
+        private static string BuildDesktopEntry() =>
+            $"""
+            [Desktop Entry]
+            Type=Application
+            Name=ShareX
+            Comment=Screen capture, file sharing and productivity tool
+            Exec="{StartupTargetPath}" -silent
+            Icon={LinuxEnvironment.ApplicationId}
+            Terminal=false
+            X-GNOME-Autostart-enabled=true
+
+            """;
     }
 }

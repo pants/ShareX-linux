@@ -100,7 +100,6 @@ internal static class Program
         StartupOptions.IgnoreHotkeyWarning = ApplicationCommandLine.IsCommandPresent("NoHotkeys");
 
         PersonalPathManager.CreateApplicationFolders();
-        FileTypeRegistration.RegisterMissingExtensions();
         ApplicationDiagnostics.WriteStartupFlags();
 
         DebugHelper.WriteLine("Avalonia application initializing.");
@@ -142,8 +141,6 @@ internal static class Program
         MainWindowIntegration.Initialize(hotkeyHost.TrayIconService, showMainWindow);
         SingleInstanceCommandRouter.MarkReady();
 
-        ShareX.Tools.MouseHighlighterManager.ActivateOnStartup(
-            ApplicationState.DefaultTaskSettings.ToolsSettings.MouseHighlighterOptions);
 
         if (showMainWindow)
         {

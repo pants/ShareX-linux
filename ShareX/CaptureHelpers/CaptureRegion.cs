@@ -66,18 +66,9 @@ namespace ShareX
             SKBitmap cursorBitmap = null;
             Point cursorPosition = Point.Empty;
 
-            if (taskSettings.CaptureSettings.ShowCursor)
-            {
-                CursorData cursorData = new CursorData();
-                if (cursorData.IsVisible)
-                {
-                    using Bitmap cursor = cursorData.ToBitmap(frozenScreenshot, screenBounds.Location);
-                    cursorBitmap = cursor.Copy();
-                    cursorPosition = new Point(
-                        cursorData.DrawPosition.X - screenBounds.X,
-                        cursorData.DrawPosition.Y - screenBounds.Y);
-                }
-            }
+            // Drawing the pointer into the frozen screenshot is the compositor's call: a
+            // Wayland client cannot read the cursor image or its position, and the screenshot
+            // portal already includes the pointer when the compositor is configured to.
 
             AvaloniaRegionCaptureRequest request = new AvaloniaRegionCaptureRequest
             {

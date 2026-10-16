@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace ShareX.Linux.Interop;
 
 /// <summary>The handful of libc entry points ShareX needs that .NET does not surface.</summary>
-internal static partial class LibC
+public static partial class LibC
 {
     private const int F_GETFD = 1;
     private const int F_SETFD = 2;
@@ -20,6 +20,12 @@ internal static partial class LibC
 
     [LibraryImport("libc", EntryPoint = "chmod", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     public static partial int Chmod(string path, uint mode);
+
+    /// <summary>Interrupt, which well-behaved command-line tools treat as "finish up and exit".</summary>
+    public const int SIGINT = 2;
+
+    [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
+    public static partial int SendSignal(int pid, int signal);
 
     /// <summary>
     /// Clears FD_CLOEXEC so a descriptor survives exec and can be handed to a child process.

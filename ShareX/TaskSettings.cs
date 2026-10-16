@@ -387,7 +387,6 @@ namespace ShareX
         public bool CaptureAutoHideDesktopIcons = false;
         public bool HDRScreenshotColorCorrection = false;
         public Rectangle CaptureCustomRegion = new Rectangle(0, 0, 0, 0);
-        public string CaptureCustomWindow = "";
 
         #endregion Capture / General
 
@@ -410,10 +409,10 @@ namespace ShareX
         public float ScreenRecordMicrophoneGain = 1f;
         public bool ScreenRecordCamera = false;
         public string ScreenRecordCameraDeviceId = "";
-        public ShareX.ScreenRecordingLib.CameraCaptureResolution ScreenRecordCameraResolution = ShareX.ScreenRecordingLib.CameraCaptureResolution.Size1280x720;
+        public CameraCaptureResolution ScreenRecordCameraResolution = CameraCaptureResolution.Size1280x720;
         public int ScreenRecordCameraFPS = 30;
-        public ShareX.ScreenRecordingLib.CameraOverlayPosition ScreenRecordCameraPosition = ShareX.ScreenRecordingLib.CameraOverlayPosition.BottomRight;
-        public ShareX.ScreenRecordingLib.CameraOverlayShape ScreenRecordCameraShape = ShareX.ScreenRecordingLib.CameraOverlayShape.Rectangle;
+        public CameraOverlayPosition ScreenRecordCameraPosition = CameraOverlayPosition.BottomRight;
+        public CameraOverlayShape ScreenRecordCameraShape = CameraOverlayShape.Rectangle;
         public int ScreenRecordCameraWidthPercent = 20;
         public int ScreenRecordCameraMargin = 20;
         public bool ScreenRecordRequireHardwareEncoder = true;
@@ -433,11 +432,6 @@ namespace ShareX
 
         #endregion Capture / Screen recorder
 
-        #region Capture / Scrolling capture
-
-        public ScrollingCaptureOptions ScrollingCaptureOptions = new ScrollingCaptureOptions();
-
-        #endregion Capture / Scrolling capture
 
         #region Capture / OCR
 
@@ -483,12 +477,10 @@ namespace ShareX
         public ColorPickerOptions ColorPickerOptions = new ColorPickerOptions();
         public ScreenColorPickerOptions ScreenColorPickerOptions = new ScreenColorPickerOptions();
         public PinToScreenOptions PinToScreenOptions = new PinToScreenOptions();
-        public MouseHighlighterOptions MouseHighlighterOptions = new MouseHighlighterOptions();
         public IndexerSettings IndexerSettings = new IndexerSettings();
         public ImageCombinerOptions ImageCombinerOptions = new ImageCombinerOptions();
         public VideoConverterOptions VideoConverterOptions = new VideoConverterOptions();
         public VideoThumbnailOptions VideoThumbnailOptions = new VideoThumbnailOptions();
-        public BorderlessWindowSettings BorderlessWindowSettings = new BorderlessWindowSettings();
         public AIOptions AIOptions = new AIOptions();
         public ImageEditorOptions ImageEditorOptions = new ImageEditorOptions();
         public BackgroundRemoverOptions BackgroundRemoverOptions = new BackgroundRemoverOptions();

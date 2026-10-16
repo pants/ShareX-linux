@@ -1,4 +1,4 @@
-﻿#region License Information (GPL v3)
+#region License Information (GPL v3)
 
 /*
     ShareX - A program that allows you to take screenshots and share any file type
@@ -23,55 +23,28 @@
 
 #endregion License Information (GPL v3)
 
-using ShareX.HelpersLib;
-using System;
-using System.Threading;
-
 namespace ShareX
 {
+    /// <summary>
+    /// Captures a single window.
+    /// </summary>
+    /// <remarks>
+    /// A Wayland client cannot see, name or address another application's window, so ShareX
+    /// cannot pick one itself. The capture is handed to the compositor's interactive screenshot
+    /// mode, where the user points at the window they want. For the same reason the capture
+    /// carries no window title or process name in its metadata.
+    /// </remarks>
     public class CaptureWindow : CaptureBase
     {
-        public IntPtr WindowHandle { get; protected set; }
-
         public CaptureWindow()
         {
         }
 
-        public CaptureWindow(IntPtr windowHandle)
-        {
-            WindowHandle = windowHandle;
-
-            IntPtr mainWindowHandle = MainWindowIntegration.WindowHandle;
-            AllowAutoHideForm = mainWindowHandle == IntPtr.Zero || WindowHandle != mainWindowHandle;
-        }
-
         protected override TaskMetadata Execute(TaskSettings taskSettings)
         {
-            WindowInfo windowInfo = new WindowInfo(WindowHandle);
+            TaskMetadata metadata = CreateMetadata();
 
-            if (windowInfo.IsMinimized)
-            {
-                windowInfo.Restore();
-                Thread.Sleep(250);
-            }
-
-            if (!windowInfo.IsActive)
-            {
-                windowInfo.Activate();
-                Thread.Sleep(100);
-            }
-
-            TaskMetadata metadata = new TaskMetadata();
-            metadata.UpdateInfo(windowInfo);
-
-            if (taskSettings.CaptureSettings.CaptureTransparent && !taskSettings.CaptureSettings.CaptureClientArea)
-            {
-                metadata.Image = TaskHelpers.GetScreenshot(taskSettings).CaptureWindowTransparent(WindowHandle);
-            }
-            else
-            {
-                metadata.Image = TaskHelpers.GetScreenshot(taskSettings).CaptureWindow(WindowHandle);
-            }
+            metadata.Image = TaskHelpers.GetScreenshot(taskSettings).CaptureWindowInteractive();
 
             return metadata;
         }

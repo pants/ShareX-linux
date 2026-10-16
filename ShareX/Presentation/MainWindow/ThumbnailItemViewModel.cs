@@ -30,6 +30,7 @@ using Avalonia.Threading;
 using ShareX.AvaloniaUI.Imaging;
 using ShareX.AvaloniaUI.Theming;
 using ShareX.HelpersLib;
+using ShareX.Linux.Desktop;
 using ShareX.Localization;
 using System;
 using System.Collections.Generic;
@@ -265,7 +266,7 @@ internal sealed class ThumbnailItemViewModel : INotifyPropertyChanged, IDisposab
 
             if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath) && FileHelpers.IsVideoFile(filePath))
             {
-                using DrawingBitmap? shellThumbnail = NativeMethods.GetFileThumbnail(filePath, new System.Drawing.Size(width, height));
+                using DrawingBitmap? shellThumbnail = FreedesktopThumbnails.TryLoad(filePath, System.Math.Max(width, height));
 
                 if (shellThumbnail != null)
                 {

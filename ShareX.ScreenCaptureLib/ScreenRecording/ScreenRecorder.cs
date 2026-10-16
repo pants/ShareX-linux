@@ -24,6 +24,7 @@
 #endregion License Information (GPL v3)
 
 using ShareX.HelpersLib;
+using ShareX.Linux.Recording;
 using System;
 using System.Diagnostics;
 using System.Drawing;
@@ -101,6 +102,7 @@ namespace ShareX.ScreenCaptureLib
         private Rectangle captureRectangle;
         private ImageCache imgCache;
         private FFmpegCLIManager ffmpeg;
+        private WaylandRecordingSource captureSource;
         private bool stopRequested;
 
         public ScreenRecorder(ScreenRecordOutput outputType, ScreenRecordingOptions options, Screenshot screenshot, Rectangle captureRectangle)
@@ -151,7 +153,15 @@ namespace ShareX.ScreenCaptureLib
 
                 if (OutputType == ScreenRecordOutput.FFmpeg)
                 {
-                    ffmpeg.Run(Options.GetFFmpegCommands());
+                    try
+                    {
+                        StartCaptureSource();
+                        ffmpeg.Run(Options.GetFFmpegCommands());
+                    }
+                    finally
+                    {
+                        StopCaptureSource();
+                    }
                 }
                 else
                 {
@@ -161,6 +171,59 @@ namespace ShareX.ScreenCaptureLib
             }
 
             IsRecording = false;
+        }
+
+        /// <summary>
+        /// Opens the compositor's screen cast and points ffmpeg's standard input at it. The user
+        /// picks the monitor or window in the portal's own dialog; the region they chose inside
+        /// ShareX is then cropped out of that stream.
+        /// </summary>
+        private void StartCaptureSource()
+        {
+            Options.StreamCrop = null;
+
+            if (!Options.FFmpeg.IsVideoSourceSelected ||
+                !Options.FFmpeg.VideoSource.Equals(FFmpegCaptureDevice.PipeWire.Value, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            WaylandRecordingSource source = new();
+
+            try
+            {
+                source.StartAsync(RecordingTarget.Monitor, FPS, Options.DrawCursor).GetAwaiter().GetResult();
+            }
+            catch
+            {
+                source.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                throw;
+            }
+
+            captureSource = source;
+
+            Rectangle crop = Rectangle.Intersect(CaptureRectangle, source.Bounds);
+
+            if (!crop.IsEmpty && crop != source.Bounds)
+            {
+                // The portal stream starts at its own origin, so translate the desktop rectangle.
+                Options.StreamCrop = new Rectangle(crop.X - source.Bounds.X, crop.Y - source.Bounds.Y,
+                    crop.Width, crop.Height);
+            }
+
+            ffmpeg.StandardInputProvider = () => source.Output;
+        }
+
+        private void StopCaptureSource()
+        {
+            WaylandRecordingSource source = captureSource;
+            captureSource = null;
+
+            if (source == null) return;
+
+            if (ffmpeg != null) ffmpeg.StandardInputProvider = null;
+
+            source.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
 
         private void RecordUsingCache()
@@ -200,6 +263,9 @@ namespace ShareX.ScreenCaptureLib
         public void StopRecording()
         {
             stopRequested = true;
+
+            // Ending the capture first closes the pipe, which lets ffmpeg finish the file.
+            captureSource?.Stop();
 
             if (ffmpeg != null)
             {

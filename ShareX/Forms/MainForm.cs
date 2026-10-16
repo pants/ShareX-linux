@@ -32,7 +32,7 @@ using System.Threading.Tasks;
 namespace ShareX;
 
 /// <summary>
-/// Coordinates the Windows hotkey host and desktop notification-area icon.
+/// Coordinates the global hotkey host and the notification-area icon.
 /// Avalonia owns the application lifetime and all visible windows.
 /// </summary>
 internal sealed class MainForm
@@ -43,8 +43,7 @@ internal sealed class MainForm
 
     public MainForm()
     {
-        _hotkeyHost = new WindowsHotkeyHost();
-        _hotkeyHost.NativeMessageReceived += OnNativeMessage;
+        _hotkeyHost = new PortalHotkeyHost();
         _hotkeyHost.Closed += OnHostClosed;
 
         ShareXResources.UseWhiteIcon = ApplicationState.Settings.UseWhiteShareXIcon;
@@ -88,31 +87,6 @@ internal sealed class MainForm
     }
 
     internal void ExitApplication() => _hotkeyHost.Close();
-
-    private void OnNativeMessage(object? sender, NativeWindowMessageEventArgs m)
-    {
-        if (m.Message == (int)WindowsMessages.QUERYENDSESSION)
-        {
-            EndSessionReasons reason = (EndSessionReasons)m.LParam.ToInt64();
-            if (reason.HasFlag(EndSessionReasons.ENDSESSION_CLOSEAPP))
-            {
-                NativeMethods.RegisterApplicationRestart("-silent", 0);
-            }
-
-            m.Result = new IntPtr(1);
-            m.Handled = true;
-        }
-        else if (m.Message == (int)WindowsMessages.ENDSESSION)
-        {
-            if (m.WParam != IntPtr.Zero)
-            {
-                ApplicationLifecycle.CloseSequence();
-            }
-
-            m.Result = IntPtr.Zero;
-            m.Handled = true;
-        }
-    }
 
     private void OnHostClosed(object? sender, EventArgs e)
     {
