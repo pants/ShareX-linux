@@ -30,7 +30,7 @@ using System.Text;
 
 namespace ShareX.Tools;
 
-/// <summary>Cancellable FFmpeg exports. Preview, metadata and playback use Windows Media Foundation.</summary>
+/// <summary>Cancellable FFmpeg exports. Preview, metadata and playback are decoded by ffmpeg too.</summary>
 internal sealed class VideoTrimmerService(string ffmpegPath)
 {
     public string FFmpegPath { get; set; } = ffmpegPath;

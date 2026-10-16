@@ -87,11 +87,12 @@ internal static class AvaloniaClipboard
         {
             DataTransferItem item = new();
             item.SetBitmap(bitmap);
-            item.Set(DataFormat.CreateBytesPlatformFormat(OperatingSystem.IsWindows() ? "PNG" : "image/png"), png);
-            if (OperatingSystem.IsWindows())
-                item.Set(DataFormat.CreateBytesPlatformFormat("CF_DIB"), dib);
+            item.Set(DataFormat.CreateBytesPlatformFormat("image/png"), png);
+            // Some applications still prefer a bitmap; "image/bmp" is the X11/Wayland name for it.
+            if (dib != null)
+                item.Set(DataFormat.CreateBytesPlatformFormat("image/bmp"), dib);
             if (!string.IsNullOrEmpty(html))
-                item.Set(DataFormat.CreateStringPlatformFormat(OperatingSystem.IsWindows() ? ClipboardDataFormats.Html : "text/html"), html);
+                item.Set(DataFormat.CreateStringPlatformFormat("text/html"), html);
             transfer.Add(item);
             return new OwnedImageTransfer(transfer, bitmap);
         }
@@ -113,7 +114,7 @@ internal static class AvaloniaClipboard
 
     public static byte[] GetImage() => DesktopServices.Run(async () =>
     {
-        byte[] png = await Clipboard.TryGetValueAsync(DataFormat.CreateBytesPlatformFormat(OperatingSystem.IsWindows() ? "PNG" : "image/png"));
+        byte[] png = await Clipboard.TryGetValueAsync(DataFormat.CreateBytesPlatformFormat("image/png"));
         if (png != null) return png;
         using AvaloniaBitmap bitmap = await Clipboard.TryGetBitmapAsync();
         if (bitmap == null) return null;

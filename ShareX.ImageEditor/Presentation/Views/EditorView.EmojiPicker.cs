@@ -39,11 +39,12 @@ namespace ShareX.ImageEditor.Presentation.Views
         {
             ResetModalContentPosition();
 
-            // Pick the monitor once, so browsing emojis does not make the panel chase the cursor.
-            if (OperatingSystem.IsWindows() && GetCursorPos(out NativePoint cursorPosition))
+            // Pick the monitor once, so browsing emojis does not make the panel chase the
+            // cursor. The editor's own window stands in for the pointer, whose position
+            // Wayland does not disclose.
+            if (TopLevel.GetTopLevel(this) is Window window)
             {
-                _emojiPickerScreen = TopLevel.GetTopLevel(this)?.Screens?.ScreenFromPoint(
-                    new PixelPoint(cursorPosition.X, cursorPosition.Y));
+                _emojiPickerScreen = window.Screens?.ScreenFromWindow(window);
             }
 
             UpdateEmojiPickerPosition();

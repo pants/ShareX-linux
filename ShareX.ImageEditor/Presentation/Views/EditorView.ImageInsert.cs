@@ -383,17 +383,24 @@ namespace ShareX.ImageEditor.Presentation.Views
             }
         }
 
+        /// <summary>
+        /// The centre of the screen the pointer is on, used to place an inserted image.
+        /// Wayland only reveals the pointer while it is over one of our own windows, so this
+        /// falls back to the screen the editor itself is on.
+        /// </summary>
         private Point? GetCursorScreenCenter(Visual relativeTo)
         {
             TopLevel? topLevel = TopLevel.GetTopLevel(this);
-            if (topLevel == null || !GetCursorPos(out NativePoint cursorPosition))
+            if (topLevel == null)
             {
                 return null;
             }
 
             Screens? screens = topLevel.Screens;
-            Screen? screen = screens?.ScreenFromPoint(
-                new PixelPoint(cursorPosition.X, cursorPosition.Y));
+            Screen? screen = (topLevel as Window) is { } window
+                ? screens?.ScreenFromWindow(window)
+                : screens?.Primary;
+            screen ??= screens?.Primary;
             if (screen == null)
             {
                 return null;
@@ -405,15 +412,5 @@ namespace ShareX.ImageEditor.Presentation.Views
             return topLevel.TranslatePoint(topLevel.PointToClient(screenCenter), relativeTo);
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        private struct NativePoint
-        {
-            public int X;
-            public int Y;
-        }
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GetCursorPos(out NativePoint point);
     }
 }

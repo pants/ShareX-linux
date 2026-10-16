@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ShareX.Avalonia\ShareX.Avalonia.csproj" />
+    <ProjectReference Include="..\ShareX.Linux\ShareX.Linux.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -24,6 +24,7 @@
 #endregion License Information (GPL v3)
 
 using ShareX.HelpersLib;
+using ShareX.Linux;
 using System;
 
 namespace ShareX.ScreenCaptureLib
@@ -66,6 +67,11 @@ namespace ShareX.ScreenCaptureLib
         public int Vorbis_QScale { get; set; } = 3;
         public int MP3_QScale { get; set; } = 4;
 
+        /// <summary>
+        /// Where ffmpeg lives. Unless the user points somewhere specific, the one installed on
+        /// the system is used: on Linux ffmpeg comes from the distribution, not bundled with
+        /// the application.
+        /// </summary>
         public string FFmpegPath
         {
             get
@@ -75,7 +81,7 @@ namespace ShareX.ScreenCaptureLib
                     return FileHelpers.GetAbsolutePath(CLIPath);
                 }
 
-                return FileHelpers.GetAbsolutePath("ffmpeg.exe");
+                return LinuxEnvironment.FindExecutable("ffmpeg") ?? FileHelpers.GetAbsolutePath("ffmpeg");
             }
         }
 

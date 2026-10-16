@@ -603,8 +603,10 @@ public partial class ScreenRecordWindow : Window, IDisposable
         ConfigureGeometry(scaling);
         Helpers.EnsureWindowPosition(this, _initialPosition.X - _frameLeftPixels, _initialPosition.Y);
         ApplyToolWindowStyle();
-        ApplyNativeWindowRegion();
-        Dispatcher.UIThread.Post(ApplyNativeWindowRegion, DispatcherPriority.Loaded);
+
+        // The frame that outlines the recorded area only makes sense when the window can be
+        // put exactly over it, which Wayland does not allow. Only the controls are shown.
+        RegionBorder.IsVisible = false;
 
         if (ActivateWindow)
         {
@@ -670,7 +672,6 @@ public partial class ScreenRecordWindow : Window, IDisposable
 
             if (IsVisible)
             {
-                Dispatcher.UIThread.Post(ApplyNativeWindowRegion, DispatcherPriority.Loaded);
             }
         }
         finally
@@ -697,52 +698,7 @@ public partial class ScreenRecordWindow : Window, IDisposable
         // capturing a specific monitor or window through the portal instead.
     }
 
-    private void ApplyNativeWindowRegion()
-    {
-        IntPtr handle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-        if (handle == IntPtr.Zero)
-        {
-            return;
-        }
-
-        int frameWidth = _captureWidth + BorderPixels * 2;
-        int frameHeight = _captureHeight + BorderPixels * 2;
-        int toolbarTop = frameHeight + ToolbarGapPixels;
-        int toolbarWidth = (int)Math.Ceiling(DisplayedToolbarWidth * _windowScaling);
-        int toolbarHeight = (int)Math.Ceiling(ToolbarHeight * _windowScaling);
-
-        IntPtr windowRegion = CreateRectRgn(_frameLeftPixels, 0, _frameLeftPixels + frameWidth, frameHeight);
-        IntPtr apertureRegion = CreateRectRgn(
-            _frameLeftPixels + BorderPixels,
-            BorderPixels,
-            _frameLeftPixels + frameWidth - BorderPixels,
-            frameHeight - BorderPixels);
-        IntPtr toolbarRegion = CreateRectRgn(
-            _toolbarLeftPixels,
-            toolbarTop,
-            _toolbarLeftPixels + toolbarWidth,
-            toolbarTop + toolbarHeight);
-
-        if (windowRegion == IntPtr.Zero || apertureRegion == IntPtr.Zero || toolbarRegion == IntPtr.Zero)
-        {
-            DeleteRegion(windowRegion);
-            DeleteRegion(apertureRegion);
-            DeleteRegion(toolbarRegion);
-            return;
-        }
-
-        CombineRgn(windowRegion, windowRegion, apertureRegion, RegionDiff);
-        CombineRgn(windowRegion, windowRegion, toolbarRegion, RegionOr);
-        DeleteObject(apertureRegion);
-        DeleteObject(toolbarRegion);
-
-        if (SetWindowRgn(handle, windowRegion, true) == 0)
-        {
-            DeleteObject(windowRegion);
-        }
-    }
-
-    private void OnTimerPointerPressed(object? sender, PointerPressedEventArgs e)
+        private void OnTimerPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (Status is not (ScreenRecordingStatus.Waiting or ScreenRecordingStatus.Paused) ||
             !e.GetCurrentPoint(TimerDragHandle).Properties.IsLeftButtonPressed)
@@ -871,23 +827,4 @@ public partial class ScreenRecordWindow : Window, IDisposable
         Dispatcher.UIThread.Post(action);
     }
 
-    private static void DeleteRegion(IntPtr region)
-    {
-        if (region != IntPtr.Zero)
-        {
-            DeleteObject(region);
-        }
     }
-
-    [DllImport("gdi32.dll")]
-    private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
-
-    [DllImport("gdi32.dll")]
-    private static extern int CombineRgn(IntPtr destination, IntPtr source1, IntPtr source2, int combineMode);
-
-    [DllImport("gdi32.dll")]
-    private static extern bool DeleteObject(IntPtr handle);
-
-    [DllImport("user32.dll")]
-    private static extern int SetWindowRgn(IntPtr windowHandle, IntPtr regionHandle, bool redraw);
-}

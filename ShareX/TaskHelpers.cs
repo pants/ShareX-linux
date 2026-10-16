@@ -2034,19 +2034,15 @@ namespace ShareX
 
         public static bool CheckFFmpeg(TaskSettings taskSettings)
         {
-            if (!Environment.Is64BitOperatingSystem && !taskSettings.CaptureSettings.FFmpegOptions.OverrideCLIPath)
-            {
-                MessageBox.Show(Strings.FFmpegOnlySupports64BitOperatingSystems,
-                    "ShareX - " + Strings.FFmpegIsMissing, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-
-                return false;
-            }
-
             string ffmpegPath = taskSettings.CaptureSettings.FFmpegOptions.FFmpegPath;
 
-            if (!File.Exists(ffmpegPath))
+            if (string.IsNullOrEmpty(ffmpegPath) || !File.Exists(ffmpegPath))
             {
-                MessageBox.Show(Strings.FFmpegDoesNotExistAtTheFollowingPath + "\r\n" + ffmpegPath,
+                // ffmpeg is a distribution package here, so point at that rather than offering
+                // to download a binary into the user's home directory.
+                MessageBox.Show(Strings.FFmpegDoesNotExistAtTheFollowingPath + Environment.NewLine + ffmpegPath +
+                    Environment.NewLine + Environment.NewLine +
+                    "Install ffmpeg with your package manager, or set a path in the screen recorder's FFmpeg options.",
                     "ShareX - " + Strings.FFmpegIsMissing, MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
                 return false;
