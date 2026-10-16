@@ -64,5 +64,4 @@ internal static class ApplicationState
     internal static HistoryManagerSQLite? HistoryManager { get; set; }
     internal static HotkeyManager? HotkeyManager { get; set; }
     internal static WatchFolderManager? WatchFolderManager { get; set; }
-    internal static ShareXUpdateManager UpdateManager { get; set; } = null!;
 }

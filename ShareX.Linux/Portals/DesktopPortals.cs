@@ -129,7 +129,10 @@ public sealed class SettingsPortal : IDisposable
             },
             (Notification<string> notification) =>
             {
-                if (notification.HasValue) SettingChanged?.Invoke(this, notification.Value);
+                if (!notification.IsCompletion && notification.HasValue)
+                {
+                    SettingChanged?.Invoke(this, notification.Value);
+                }
             },
             ObserverFlags.None, false, null).ConfigureAwait(false);
     }

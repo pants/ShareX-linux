@@ -110,7 +110,7 @@ public sealed class GlobalShortcutsPortal : IAsyncDisposable
             static (Message message, object? state) => ReadActivation(message),
             (Notification<(string Session, string Id, ulong Timestamp)> notification) =>
             {
-                if (!notification.HasValue) return;
+                if (notification.IsCompletion || !notification.HasValue) return;
                 if (!string.Equals(notification.Value.Session, sessionHandle, StringComparison.Ordinal)) return;
 
                 Activated?.Invoke(this, new GlobalShortcutActivatedEventArgs
@@ -126,7 +126,8 @@ public sealed class GlobalShortcutsPortal : IAsyncDisposable
             static (Message message, object? state) => message.GetBodyReader().ReadObjectPathAsString(),
             (Notification<string> notification) =>
             {
-                if (notification.HasValue && string.Equals(notification.Value, sessionHandle, StringComparison.Ordinal))
+                if (!notification.IsCompletion && notification.HasValue &&
+                    string.Equals(notification.Value, sessionHandle, StringComparison.Ordinal))
                 {
                     ShortcutsChanged?.Invoke(this, EventArgs.Empty);
                 }

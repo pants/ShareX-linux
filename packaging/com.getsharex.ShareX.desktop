@@ -1,0 +1,32 @@
+[Desktop Entry]
+Type=Application
+Name=ShareX
+GenericName=Screen Capture Tool
+Comment=Capture the screen, annotate it and share it
+Keywords=screenshot;capture;screen;record;recorder;upload;share;annotate;ocr;
+Exec=sharex %F
+Icon=com.getsharex.ShareX
+Terminal=false
+Categories=Graphics;2DGraphics;RasterGraphics;
+StartupNotify=true
+StartupWMClass=ShareX
+SingleMainWindow=true
+MimeType=image/png;image/jpeg;image/gif;image/webp;image/bmp;image/tiff;video/mp4;video/webm;
+
+Actions=CaptureRegion;CaptureScreen;CaptureWindow;RecordScreen;
+
+[Desktop Action CaptureRegion]
+Name=Capture a region
+Exec=sharex -RectangleRegion
+
+[Desktop Action CaptureScreen]
+Name=Capture the whole screen
+Exec=sharex -PrintScreen
+
+[Desktop Action CaptureWindow]
+Name=Capture a window
+Exec=sharex -ActiveWindow
+
+[Desktop Action RecordScreen]
+Name=Record the screen
+Exec=sharex -ScreenRecorder

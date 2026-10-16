@@ -95,7 +95,7 @@ public sealed class PortalHotkeyHost : IHotkeyHost
                 DebugHelper.WriteLine(
                     "Global shortcuts are unavailable: this desktop does not implement the GlobalShortcuts portal. " +
                     "ShareX actions can still be bound to keys in the desktop's own keyboard settings by " +
-                    "running \"sharex -job <name>\".");
+                    "running \"sharex -<job name>\", for example \"sharex -RectangleRegion\".");
                 return;
             }
 

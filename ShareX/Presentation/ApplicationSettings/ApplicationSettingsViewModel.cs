@@ -76,7 +76,6 @@ public sealed class ApplicationSettingsViewModel : INotifyPropertyChanged, IDisp
     public ObservableCollection<ClipboardFormatItem> ClipboardFormats { get; private set; } = [];
     public IReadOnlyList<LanguageOption> LanguageOptions { get; } = CreateLanguageOptions();
     public IReadOnlyList<EnumOption<HotkeyType>> HotkeyTypeOptions { get; } = CreateEnumOptions<HotkeyType>();
-    public IReadOnlyList<EnumOption<UpdateChannel>> UpdateChannelOptions { get; } = CreateEnumOptions<UpdateChannel>();
     public IReadOnlyList<EnumOption<ThumbnailTitleLocation>> ThumbnailTitleLocationOptions { get; } = CreateEnumOptions<ThumbnailTitleLocation>();
     public IReadOnlyList<EnumOption<ThumbnailViewClickAction>> ThumbnailClickActionOptions { get; } = CreateEnumOptions<ThumbnailViewClickAction>();
     public IReadOnlyList<EnumOption<ProxyMethod>> ProxyMethodOptions { get; } = CreateEnumOptions<ProxyMethod>();
@@ -305,27 +304,7 @@ public sealed class ApplicationSettingsViewModel : INotifyPropertyChanged, IDisp
         set { if (value != null) SetSetting(Settings.TrayMiddleClickAction, value.Value, x => Settings.TrayMiddleClickAction = x); }
     }
 
-    public bool AutoCheckUpdate
-    {
-        get => Settings.AutoCheckUpdate;
-        set
-        {
-            if (SetSetting(Settings.AutoCheckUpdate, value, x => Settings.AutoCheckUpdate = x))
-            {
-                OnPropertyChanged(nameof(UpdateChannelEnabled));
-            }
-        }
-    }
-
-    public bool UpdateChannelEnabled => AutoCheckUpdate;
-
-    public EnumOption<UpdateChannel>? SelectedUpdateChannel
-    {
-        get => Find(UpdateChannelOptions, Settings.UpdateChannel);
-        set { if (value != null) SetSetting(Settings.UpdateChannel, value.Value, x => Settings.UpdateChannel = x); }
-    }
-
-    public bool StartWithWindows
+        public bool StartWithWindows
     {
         get => _startWithWindows;
         set
@@ -656,20 +635,7 @@ public sealed class ApplicationSettingsViewModel : INotifyPropertyChanged, IDisp
 
     public void EditQuickTaskMenu() => QuickTaskMenuEditorIntegration.Show();
 
-    public async Task CheckDevBuildAsync()
-    {
-        IsBusy = true;
-        try
-        {
-            await TaskHelpers.DownloadDevBuild();
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    public void OpenChromeExtensionPage() => URLHelpers.OpenURL("https://chrome.google.com/webstore/detail/sharex/nlkoigbdolhchiicbonbihbphgamnaoc");
+        public void OpenChromeExtensionPage() => URLHelpers.OpenURL("https://chrome.google.com/webstore/detail/sharex/nlkoigbdolhchiicbonbihbphgamnaoc");
     public void OpenFirefoxAddonPage() => URLHelpers.OpenURL("https://addons.mozilla.org/en-US/firefox/addon/sharex/");
     public void OpenPersonalFolder() => FileHelpers.OpenFolder(PersonalFolderPreview);
     public void OpenScreenshotsFolder() => FileHelpers.OpenFolder(ScreenshotsFolderPreview);

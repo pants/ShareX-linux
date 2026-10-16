@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.getsharex.ShareX</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="com.getsharex">
+    <name>ShareX Team</name>
+  </developer>
+
+  <name>ShareX</name>
+  <summary>Capture the screen, annotate it and share it</summary>
+
+  <description>
+    <p>
+      ShareX captures a region, a window or a whole monitor, lets you annotate the result in a
+      built-in editor, and sends it wherever you want: a file, the clipboard, or one of a long
+      list of upload destinations.
+    </p>
+    <p>
+      This is the Linux port. Capture goes through xdg-desktop-portal, so it works on Wayland
+      without any privileged access to the display: the compositor renders the image and the
+      user decides, once, what ShareX may see.
+    </p>
+    <p>Beyond capture it includes:</p>
+    <ul>
+      <li>Screen recording to MP4, WebM or GIF, with an optional webcam overlay</li>
+      <li>An annotation editor with shapes, text, blur, highlight, steps and stickers</li>
+      <li>Text recognition, QR codes, image effects and batch conversion tools</li>
+      <li>Uploads to dozens of image hosts, file hosts and URL shorteners</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">com.getsharex.ShareX.desktop</launchable>
+
+  <categories>
+    <category>Graphics</category>
+  </categories>
+
+  <keywords>
+    <keyword>screenshot</keyword>
+    <keyword>capture</keyword>
+    <keyword>recorder</keyword>
+    <keyword>annotate</keyword>
+    <keyword>upload</keyword>
+  </keywords>
+
+  <url type="homepage">https://getsharex.com</url>
+  <url type="bugtracker">https://github.com/ShareX/ShareX/issues</url>
+
+  <provides>
+    <binary>sharex</binary>
+  </provides>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <content_rating type="oars-1.1"/>
+</component>

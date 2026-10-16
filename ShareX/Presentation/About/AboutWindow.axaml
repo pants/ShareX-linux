@@ -73,21 +73,6 @@
                                    FontWeight="Normal"
                                    TextAlignment="Center"
                                    Foreground="{DynamicResource ShareX.Brush.Text.Secondary}"/>
-                        <StackPanel x:Name="UpdatePanel" IsVisible="False" Spacing="6">
-                            <ProgressBar x:Name="UpdateProgress"
-                                         IsIndeterminate="True"
-                                         Width="180"
-                                         Height="3"/>
-                            <TextBlock x:Name="UpdateStatusText"
-                                       FontWeight="Normal"
-                                       TextAlignment="Center"
-                                       TextWrapping="Wrap"/>
-                            <HyperlinkButton x:Name="UpdateAvailableButton"
-                                             Classes="about-link"
-                                             IsVisible="False"
-                                             HorizontalAlignment="Center"
-                                             Click="OnUpdateAvailableClick"/>
-                        </StackPanel>
                     </StackPanel>
 
                     <TextBlock x:Name="CopyrightText"

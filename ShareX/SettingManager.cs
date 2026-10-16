@@ -259,13 +259,6 @@ namespace ShareX
                 DefaultTaskSettings.CaptureSettings.FFmpegOptions.FixSources();
             }
 
-            if (Settings.IsUpgradeFrom("16.0.2"))
-            {
-                if (Settings.CheckPreReleaseUpdates)
-                {
-                    Settings.UpdateChannel = UpdateChannel.PreRelease;
-                }
-            }
         }
 
         public static void HistoryConnect()

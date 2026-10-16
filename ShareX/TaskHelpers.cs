@@ -2153,7 +2153,6 @@ namespace ShareX
                 HotkeyType.RectangleRegion => LucideIcons.scan,
                 HotkeyType.CustomRegion => LucideIcons.scan_line,
                 HotkeyType.LastRegion => LucideIcons.layers,
-                HotkeyType.ScrollingCapture => LucideIcons.scroll_text,
                 HotkeyType.AutoCapture => LucideIcons.clock,
                 HotkeyType.StartAutoCapture => LucideIcons.circle_play,
                 HotkeyType.StopAutoCapture => LucideIcons.timer_off,
@@ -2175,7 +2174,6 @@ namespace ShareX
                 HotkeyType.ColorPicker => LucideIcons.palette,
                 HotkeyType.ScreenColorPicker => LucideIcons.pipette,
                 HotkeyType.Ruler => LucideIcons.ruler,
-                HotkeyType.MouseHighlighter => LucideIcons.mouse_pointer_click,
                 HotkeyType.PinToScreen => LucideIcons.pin,
                 HotkeyType.PinToScreenFromScreen => LucideIcons.picture_in_picture,
                 HotkeyType.PinToScreenFromClipboard => LucideIcons.clipboard,
@@ -2207,13 +2205,6 @@ namespace ShareX
                 HotkeyType.Metadata => LucideIcons.tags,
                 HotkeyType.StripMetadata => LucideIcons.file_x,
                 HotkeyType.IndexFolder => LucideIcons.folder_tree,
-                HotkeyType.ClipboardViewer => LucideIcons.clipboard_list,
-                HotkeyType.BorderlessWindow => LucideIcons.frame,
-                HotkeyType.ActiveWindowBorderless => LucideIcons.maximize,
-                HotkeyType.ActiveWindowTopMost => LucideIcons.panel_top,
-                HotkeyType.InspectWindow => LucideIcons.scan_search,
-                HotkeyType.NetworkMonitor => LucideIcons.activity,
-                HotkeyType.MonitorTest => LucideIcons.monitor,
 
                 // Other
                 HotkeyType.DisableHotkeys => LucideIcons.keyboard_off,
@@ -2468,41 +2459,7 @@ namespace ShareX
             ActionsToolbarWindowIntegration.Toggle();
         }
 
-        public static async Task DownloadDevBuild()
-        {
-            GitHubUpdateChecker updateChecker = new GitHubUpdateChecker("ShareX", "DevBuilds")
-            {
-                IsDev = true,
-                IsPortable = StartupOptions.Portable
-            };
-
-            await updateChecker.CheckUpdateAsync();
-
-            if (updateChecker.Status == UpdateStatus.UpdateAvailable)
-            {
-                await UpdateMessageWindow.StartAsync(updateChecker);
-            }
-            else if (updateChecker.Status == UpdateStatus.UpToDate)
-            {
-                MessageBox.Show(Strings.ShareXIsUpToDate, "ShareX", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-        }
-
-        public static async Task DownloadAppVeyorBuild()
-        {
-            AppVeyorUpdateChecker updateChecker = new AppVeyorUpdateChecker()
-            {
-                IsDev = true,
-                IsPortable = StartupOptions.Portable,
-                Branch = "develop"
-            };
-
-            await updateChecker.CheckUpdateAsync();
-
-            await UpdateMessageWindow.StartAsync(updateChecker);
-        }
-
-        public static Image GenerateQRCode(string text, int size)
+                        public static Image GenerateQRCode(string text, int size)
         {
             if (CheckQRCodeContent(text))
             {

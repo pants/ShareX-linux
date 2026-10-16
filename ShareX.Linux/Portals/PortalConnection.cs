@@ -154,8 +154,16 @@ public sealed class PortalConnection : IDisposable
             static (Message message, object? state) => ReadResponse(message),
             (Notification<PortalResponse> notification) =>
             {
-                if (notification.Exception != null) completion.TrySetException(notification.Exception);
-                else if (notification.HasValue) completion.TrySetResult(notification.Value);
+                // Exception is only readable once the observer has completed; reading it on a
+                // value notification throws, and an exception escaping here closes the bus.
+                if (notification.IsCompletion)
+                {
+                    if (notification.Exception != null) completion.TrySetException(notification.Exception);
+                }
+                else if (notification.HasValue)
+                {
+                    completion.TrySetResult(notification.Value);
+                }
             },
             ObserverFlags.None, false, null);
 

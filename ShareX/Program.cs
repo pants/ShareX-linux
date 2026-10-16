@@ -107,7 +107,6 @@ internal static class Program
         ApplicationDiagnostics.InitializeAvalonia();
 
         SettingManager.LoadInitialSettings();
-        ApplicationState.UpdateManager = new ShareXUpdateManager();
         LanguageHelper.ChangeLanguage(ApplicationState.Settings.Language);
         CleanupManager.CleanupAsync();
 

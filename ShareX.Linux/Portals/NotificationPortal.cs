@@ -127,7 +127,7 @@ public sealed class NotificationPortal : IDisposable
             },
             (Notification<(string Id, string Action)> notification) =>
             {
-                if (!notification.HasValue) return;
+                if (notification.IsCompletion || !notification.HasValue) return;
 
                 ActionInvoked?.Invoke(this, new DesktopNotificationActivatedEventArgs
                 {

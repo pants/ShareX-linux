@@ -195,12 +195,8 @@
                                 <Border Classes="section-card" controls:SettingsSearch.IsPanel="True">
                                     <StackPanel Spacing="6">
                                         <TextBlock Classes="section-title" Text="{x:Static res:Strings.ApplicationSettingsWindow_Updates}"/>
-                                        <CheckBox Classes="setting" Content="{x:Static res:Strings.ApplicationSettingsWindow_AutomaticallyCheckForUpdates}" IsChecked="{Binding AutoCheckUpdate, Mode=TwoWay}"/>
                                         <Grid ColumnDefinitions="190,*" ColumnSpacing="8">
-                                            <TextBlock Text="{x:Static res:Strings.ApplicationSettingsWindow_UpdateChannelLabel}" VerticalAlignment="Center" FontWeight="Normal"/>
-                                            <ComboBox Grid.Column="1" Classes="form-control" IsEnabled="{Binding UpdateChannelEnabled}" ItemsSource="{Binding UpdateChannelOptions}" SelectedItem="{Binding SelectedUpdateChannel, Mode=TwoWay}"/>
                                         </Grid>
-                                        <Button Classes="compact" HorizontalAlignment="Left" Content="{x:Static res:Strings.ApplicationSettingsWindow_InstallDevBuild}" IsEnabled="{Binding !IsBusy}" Click="OnCheckDevBuildClick"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>

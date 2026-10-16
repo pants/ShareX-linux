@@ -42,13 +42,6 @@ namespace ShareX
         Unknown
     }
 
-    public enum UpdateChannel // Localized
-    {
-        Release,
-        PreRelease,
-        Dev
-    }
-
     public enum SupportedLanguage
     {
         Automatic, // Localized
@@ -234,8 +227,6 @@ namespace ShareX
         [Category(EnumExtensions.HotkeyType_Category_ScreenCapture)]
         LastRegion,
         [Category(EnumExtensions.HotkeyType_Category_ScreenCapture)]
-        ScrollingCapture,
-        [Category(EnumExtensions.HotkeyType_Category_ScreenCapture)]
         AutoCapture,
         [Category(EnumExtensions.HotkeyType_Category_ScreenCapture)]
         StartAutoCapture,
@@ -271,8 +262,6 @@ namespace ShareX
         ScreenColorPicker,
         [Category(EnumExtensions.HotkeyType_Category_Tools)]
         Ruler,
-        [Category(EnumExtensions.HotkeyType_Category_Tools)]
-        MouseHighlighter,
         [Category(EnumExtensions.HotkeyType_Category_Tools)]
         PinToScreen,
         [Category(EnumExtensions.HotkeyType_Category_Tools)]
@@ -333,20 +322,6 @@ namespace ShareX
         StripMetadata,
         [Category(EnumExtensions.HotkeyType_Category_Tools)]
         IndexFolder,
-        [Category(EnumExtensions.HotkeyType_Category_Tools)]
-        ClipboardViewer,
-        [Category(EnumExtensions.HotkeyType_Category_Tools)]
-        BorderlessWindow,
-        [Category(EnumExtensions.HotkeyType_Category_Tools)]
-        ActiveWindowBorderless,
-        [Category(EnumExtensions.HotkeyType_Category_Tools)]
-        ActiveWindowTopMost,
-        [Category(EnumExtensions.HotkeyType_Category_Tools)]
-        InspectWindow,
-        [Category(EnumExtensions.HotkeyType_Category_Tools)]
-        NetworkMonitor,
-        [Category(EnumExtensions.HotkeyType_Category_Tools)]
-        MonitorTest,
         // Other
         [Category(EnumExtensions.HotkeyType_Category_Other)]
         DisableHotkeys,
