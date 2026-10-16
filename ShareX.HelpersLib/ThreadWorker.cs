@@ -45,9 +45,9 @@ namespace ShareX.HelpersLib
         {
             if (thread == null)
             {
+                // Apartment state is a COM concept and has no meaning outside Windows.
                 thread = new Thread(WorkThread);
                 thread.IsBackground = true;
-                thread.SetApartmentState(state);
                 thread.Start();
             }
         }

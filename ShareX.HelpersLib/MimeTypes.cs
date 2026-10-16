@@ -28,6 +28,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
+using ShareX.Linux.Desktop;
+
 namespace ShareX.HelpersLib
 {
     public static class MimeTypes
@@ -67,7 +69,7 @@ namespace ShareX.HelpersLib
                         return mimeType;
                     }
 
-                    mimeType = RegistryHelpers.GetValueString(extension, "Content Type", RegistryHive.ClassesRoot);
+                    mimeType = SharedMimeDatabase.GetMimeTypeFromExtension(extension);
 
                     if (!string.IsNullOrEmpty(mimeType))
                     {

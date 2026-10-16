@@ -28,7 +28,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
-using Microsoft.Win32;
 using SkiaSharp;
 using System;
 using System.Collections.Generic;
@@ -40,17 +39,22 @@ namespace ShareX.HelpersLib;
 /// <summary>
 /// Creates DPI-friendly tray icons from the bundled Lucide font.
 /// </summary>
+/// <remarks>
+/// The icon is rendered at 24 px, which StatusNotifierItem hosts on every mainstream Linux panel
+/// scale cleanly, and recoloured whenever the desktop switches between light and dark.
+/// </remarks>
 public static class LucideTrayIcon
 {
-    private const string PersonalizeRegistryPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize";
-    private const string SystemUsesLightThemeRegistryValue = "SystemUsesLightTheme";
+    /// <summary>Panel icons on Linux are served from a single bitmap; 24 px scales well both ways.</summary>
+    private const int TrayIconSize = 24;
+
     private static readonly Uri LucideFontUri = new("avares://ShareX.Avalonia/Assets/lucide.ttf");
     private static readonly int[] IconSizes = [16, 20, 24, 32, 40, 48, 64];
     private static readonly Lazy<SKTypeface> LucideTypeface = new(LoadTypeface);
 
     /// <summary>
-    /// Assigns a Lucide glyph to a tray icon and keeps its color in sync with the
-    /// Windows taskbar theme. Dispose the returned binding before the tray icon.
+    /// Assigns a Lucide glyph to a tray icon and keeps its colour in sync with the desktop
+    /// theme. Dispose the returned binding before the tray icon.
     /// </summary>
     public static IDisposable Bind(TrayIcon trayIcon, string glyph)
     {
@@ -65,8 +69,7 @@ public static class LucideTrayIcon
     }
 
     /// <summary>
-    /// Creates a small bitmap using the color appropriate for the current
-    /// Windows taskbar theme.
+    /// Creates a small bitmap using the colour appropriate for the current desktop theme.
     /// </summary>
     public static SKBitmap CreateImage(string glyph)
     {
@@ -84,9 +87,7 @@ public static class LucideTrayIcon
         }
 
         SKColor skColor = new(color.R, color.G, color.B, color.A);
-        int size = OperatingSystem.IsWindows() ? Math.Max(NativeMethods.GetSystemMetrics(SystemMetric.SM_CXSMICON),
-            NativeMethods.GetSystemMetrics(SystemMetric.SM_CYSMICON)) : 16;
-        byte[] imageData = RenderGlyph(glyph, skColor, size);
+        byte[] imageData = RenderGlyph(glyph, skColor, TrayIconSize);
 
         using MemoryStream stream = new(imageData, writable: false);
         return SkiaImageHelpers.Decode(stream);
@@ -99,20 +100,9 @@ public static class LucideTrayIcon
 
     private static System.Drawing.Color GetThemeIconColor()
     {
-        return (OperatingSystem.IsWindows() ? IsLightTaskbarTheme() :
-            Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant == PlatformThemeVariant.Light) ?
+        return Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant == PlatformThemeVariant.Light ?
             System.Drawing.Color.Black :
             System.Drawing.Color.White;
-    }
-
-    private static bool IsLightTaskbarTheme()
-    {
-        int? value = RegistryHelpers.GetValueDWord(
-            PersonalizeRegistryPath,
-            SystemUsesLightThemeRegistryValue,
-            RegistryHive.CurrentUser);
-
-        return value != 0;
     }
 
     private static SKTypeface LoadTypeface()
@@ -202,22 +192,7 @@ public static class LucideTrayIcon
             _synchronizationContext = SynchronizationContext.Current;
 
             RefreshIcon();
-            if (OperatingSystem.IsWindows())
-            {
-                SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
-                SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
-            }
             if (Application.Current?.PlatformSettings is { } platform) platform.ColorValuesChanged += OnColorsChanged;
-        }
-
-        private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
-        {
-            QueueRefresh();
-        }
-
-        private void OnDisplaySettingsChanged(object? sender, EventArgs e)
-        {
-            QueueRefresh();
         }
 
         private void OnColorsChanged(object? sender, PlatformColorValues e) => QueueRefresh();
@@ -258,11 +233,6 @@ public static class LucideTrayIcon
             }
 
             _disposed = true;
-            if (OperatingSystem.IsWindows())
-            {
-                SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
-                SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
-            }
             if (Application.Current?.PlatformSettings is { } platform) platform.ColorValuesChanged -= OnColorsChanged;
             _trayIcon.Icon = null;
         }

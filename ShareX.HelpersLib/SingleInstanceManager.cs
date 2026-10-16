@@ -26,9 +26,8 @@
 using System;
 using System.IO;
 using System.IO.Pipes;
-using System.Security.AccessControl;
-using System.Security.Principal;
 using System.Text;
+using ShareX.Linux.Desktop;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -93,16 +92,14 @@ namespace ShareX.HelpersLib
 
                 try
                 {
-                    PipeSecurity pipeSecurity = new PipeSecurity();
-
-                    using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
-                    {
-                        pipeSecurity.AddAccessRule(new PipeAccessRule(identity.User, PipeAccessRights.ReadWrite, AccessControlType.Allow));
-                    }
-
-                    using (NamedPipeServerStream namedPipeServer = NamedPipeServerStreamAcl.Create(PipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 0, 0, pipeSecurity))
+                    using (NamedPipeServerStream namedPipeServer = new NamedPipeServerStream(PipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
                     {
                         namedPipeServerCreated = true;
+
+                        // .NET backs named pipes with a Unix socket in the temp directory, which
+                        // the default umask leaves readable to other local accounts. ShareX hands
+                        // file paths over it, so restrict it to this user.
+                        LinuxIpc.RestrictPipeToCurrentUser(PipeName);
 
                         await namedPipeServer.WaitForConnectionAsync(cts.Token).ConfigureAwait(false);
 

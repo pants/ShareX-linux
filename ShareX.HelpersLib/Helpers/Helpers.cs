@@ -33,7 +33,6 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Media;
 using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Resources;
@@ -46,6 +45,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using System.Xml;
+
+using ShareX.Linux.Desktop;
 
 namespace ShareX.HelpersLib
 {
@@ -379,46 +380,17 @@ namespace ShareX.HelpersLib
 
         public static void PlaySound(Stream stream)
         {
-            if (stream != null)
-            {
-                Task.Run(() =>
-                {
-                    using (stream)
-                    using (SoundPlayer soundPlayer = new SoundPlayer(stream))
-                    {
-                        soundPlayer.Play();
-                    }
-                });
-            }
+            SoundPlayback.Play(stream);
         }
 
         public static void PlaySoundSync(Stream stream)
         {
-            if (stream != null)
-            {
-                Task.Run(() =>
-                {
-                    using (stream)
-                    using (SoundPlayer soundPlayer = new SoundPlayer(stream))
-                    {
-                        soundPlayer.PlaySync();
-                    }
-                });
-            }
+            SoundPlayback.Play(stream);
         }
 
         public static void PlaySoundAsync(string filePath)
         {
-            if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
-            {
-                Task.Run(() =>
-                {
-                    using (SoundPlayer soundPlayer = new SoundPlayer(filePath))
-                    {
-                        soundPlayer.PlaySync();
-                    }
-                });
-            }
+            SoundPlayback.Play(filePath);
         }
 
         public static bool WaitWhile(Func<bool> check, int interval, int timeout = -1)
@@ -562,38 +534,19 @@ namespace ShareX.HelpersLib
             }
         }
 
+        /// <summary>True when the process is running as root.</summary>
         public static bool IsAdministrator()
         {
-            try
-            {
-                using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
-                {
-                    WindowsPrincipal principal = new WindowsPrincipal(identity);
-                    return principal.IsInRole(WindowsBuiltInRole.Administrator);
-                }
-            }
-            catch
-            {
-                return false;
-            }
+            return LinuxUser.IsRoot;
         }
 
+        /// <summary>
+        /// True when the user could gain root, which on Linux means membership of a group such
+        /// as wheel or sudo.
+        /// </summary>
         public static bool IsMemberOfAdministratorsGroup()
         {
-            try
-            {
-                using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
-                {
-                    WindowsPrincipal principal = new WindowsPrincipal(identity);
-                    SecurityIdentifier sid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
-                    return principal.UserClaims.Any(x => x.Value.Contains(sid.Value));
-                }
-            }
-            catch
-            {
-            }
-
-            return false;
+            return LinuxUser.CanElevate;
         }
 
         public static string RepeatGenerator(int count, Func<string> generator)
@@ -637,12 +590,7 @@ namespace ShareX.HelpersLib
 
         public static string GetOperatingSystemProductName(bool includeBit = false)
         {
-            string productName = RegistryHelpers.GetValueString(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductName", RegistryHive.LocalMachine);
-
-            if (string.IsNullOrEmpty(productName))
-            {
-                productName = Environment.OSVersion.VersionString;
-            }
+            string productName = SystemInformation.ProductName;
 
             if (includeBit)
             {
@@ -790,20 +738,12 @@ namespace ShareX.HelpersLib
             return result;
         }
 
+        /// <summary>
+        /// Whether the desktop is in a touch-first mode. No freedesktop standard reports this,
+        /// so ShareX always lays out for a pointer.
+        /// </summary>
         public static bool IsTabletMode()
         {
-            //int state = NativeMethods.GetSystemMetrics(SystemMetric.SM_CONVERTIBLESLATEMODE);
-            //return state == 0;
-
-            try
-            {
-                int result = (int)Registry.GetValue(@"HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\ImmersiveShell", "TabletMode", 0);
-                return result > 0;
-            }
-            catch
-            {
-            }
-
             return false;
         }
 
@@ -833,9 +773,8 @@ namespace ShareX.HelpersLib
         public static byte[] GetProgressIconBytes(int percentage, Color color)
         {
             percentage = percentage.Clamp(0, 100);
-            Size size = OperatingSystem.IsWindows()
-                ? new Size(NativeMethods.GetSystemMetrics(SystemMetric.SM_CXSMICON), NativeMethods.GetSystemMetrics(SystemMetric.SM_CYSMICON))
-                : new Size(16, 16);
+            // Panel icons are served from one bitmap on Linux; 24 px scales well in both directions.
+            Size size = new Size(24, 24);
             using SKBitmap bitmap = SkiaImageHelpers.CreateBitmap(size.Width, size.Height);
             using SKCanvas canvas = new(bitmap);
             canvas.Clear(new SKColor(39, 39, 39));
@@ -916,40 +855,24 @@ namespace ShareX.HelpersLib
             return Task.WhenAll(tasks);
         }
 
+        /// <summary>
+        /// Places a window at an absolute desktop position where the platform allows it.
+        /// </summary>
+        /// <remarks>
+        /// Wayland deliberately keeps global coordinates from clients: a surface cannot ask to be
+        /// put at a point on the desktop, only to be fullscreen or to be placed relative to a
+        /// parent. Overlays that need to cover a monitor go fullscreen instead.
+        /// </remarks>
         public static void EnsureWindowPosition(Avalonia.Controls.Window window, int x, int y)
         {
-            IntPtr handle = window.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-            if (!OperatingSystem.IsWindows() || handle == IntPtr.Zero)
-            {
-                return;
-            }
-
-            Rectangle bounds = NativeMethods.GetWindowRect(handle);
-            if (bounds.X != x || bounds.Y != y)
-            {
-                // Avalonia's Win32 resizing can shift a window by a monitor's work-area inset.
-                // Move in screen coordinates without reassigning Position and changing its cached DPI scale.
-                NativeMethods.SetWindowPos(handle, IntPtr.Zero, x, y, 0, 0,
-                    SetWindowPosFlags.SWP_NOSIZE | SetWindowPosFlags.SWP_NOZORDER | SetWindowPosFlags.SWP_NOACTIVATE);
-            }
         }
 
+        /// <summary>
+        /// Confines the pointer to a window. Wayland exposes this through the pointer-constraints
+        /// protocol, which Avalonia does not surface, so the pointer stays free.
+        /// </summary>
         public static void LockCursorToWindow(Avalonia.Controls.Window window)
         {
-            window.Activated += (sender, e) =>
-            {
-                IntPtr handle = window.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-                if (OperatingSystem.IsWindows() && handle != IntPtr.Zero)
-                {
-                    Rectangle bounds = NativeMethods.GetWindowRect(handle);
-                    if (bounds.Width > 0 && bounds.Height > 0)
-                    {
-                        NativeMethods.ClipCursor(new RECT(bounds));
-                    }
-                }
-            };
-            window.Deactivated += (sender, e) => { if (OperatingSystem.IsWindows()) NativeMethods.ClipCursor(IntPtr.Zero); };
-            window.Closed += (sender, e) => { if (OperatingSystem.IsWindows()) NativeMethods.ClipCursor(IntPtr.Zero); };
         }
 
         public static bool IsDefaultSettings<T>(IEnumerable<T> current, IEnumerable<T> source, Func<T, T, bool> predicate)
@@ -960,15 +883,6 @@ namespace ShareX.HelpersLib
             }
 
             return true;
-        }
-
-        public static string GetDesktopWallpaperFilePath()
-        {
-            byte[] transcodedImageCache = (byte[])RegistryHelpers.GetValue(@"Control Panel\Desktop", "TranscodedImageCache");
-            byte[] transcodedImageCacheDest = new byte[transcodedImageCache.Length - 24];
-            Array.Copy(transcodedImageCache, 24, transcodedImageCacheDest, 0, transcodedImageCacheDest.Length);
-            string wallpaperFilePath = Encoding.Unicode.GetString(transcodedImageCacheDest);
-            return wallpaperFilePath.TrimEnd('\0');
         }
 
         public static IEnumerable<int> Range(int from, int to, int increment = 1)

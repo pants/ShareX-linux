@@ -33,8 +33,6 @@ public interface IHotkeyHost : IDisposable
 {
     event HotkeyEventHandler HotkeyPress;
     event EventHandler Closed;
-    event EventHandler<NativeWindowMessageEventArgs> NativeMessageReceived;
-    IntPtr Handle { get; }
     bool IsDisposed { get; }
     int HotkeyRepeatLimit { get; set; }
     void RegisterHotkey(HotkeyInfo hotkeyInfo);

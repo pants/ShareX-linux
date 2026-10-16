@@ -42,6 +42,8 @@ using MessageBoxButtons = ShareX.AvaloniaUI.MessageBoxButtons;
 using MessageBoxDefaultButton = ShareX.AvaloniaUI.MessageBoxDefaultButton;
 using MessageBoxIcon = ShareX.AvaloniaUI.MessageBoxIcon;
 
+using ShareX.Linux.Desktop;
+
 namespace ShareX.HelpersLib;
 
 public readonly record struct DownloaderWindowResult(DialogResult DialogResult, DownloaderWindowStatus Status);
@@ -134,7 +136,7 @@ public partial class DownloaderWindow : Window
     {
         if (Status != DownloaderWindowStatus.DownloadCompleted) return;
 
-        if (VerifyInstallerSignature && !AuthenticodeSignatureVerifier.IsTrusted(DownloadLocation))
+        if (VerifyInstallerSignature && !UpdateSignatureVerifier.IsTrusted(DownloadLocation))
         {
             AvaloniaDialogResult result = MessageBox.Show(
                 this,
@@ -294,29 +296,8 @@ public partial class DownloaderWindow : Window
             return;
         }
 
-        try
-        {
-            using Process process = new();
-            ProcessStartInfo startInfo = new()
-            {
-                FileName = DownloadLocation,
-                Arguments = "/UPDATE",
-                UseShellExecute = true
-            };
-
-            if (InstallType == InstallType.Silent) startInfo.Arguments += " /SILENT";
-            else if (InstallType == InstallType.VerySilent) startInfo.Arguments += " /VERYSILENT";
-
-            if (Helpers.IsDefaultInstallDir() && !Helpers.IsMemberOfAdministratorsGroup())
-            {
-                startInfo.Verb = "runas";
-            }
-
-            process.StartInfo = startInfo;
-            process.Start();
-        }
-        catch
-        {
-        }
+        // There is no self-installing download on Linux: packages are installed by the
+        // distribution's own tooling, so hand the file to the desktop and let it decide.
+        ShellIntegration.OpenFile(DownloadLocation);
     }
 }

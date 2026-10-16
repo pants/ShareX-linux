@@ -158,9 +158,10 @@ public partial class UpdateMessageWindow : Window
             return;
         }
 
+        // Wayland has no "flash the taskbar entry" call; the xdg-shell attention request is the
+        // closest equivalent and Avalonia raises it through Activate on a minimised window.
         WindowState = Avalonia.Controls.WindowState.Minimized;
-        IntPtr handle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-        if (handle != IntPtr.Zero) NativeMethods.FlashWindowEx(handle, 10);
+        ShowInTaskbar = true;
     }
 
     private void OnViewChangelogClick(object? sender, RoutedEventArgs e) => URLHelpers.OpenURL(Links.Changelog);

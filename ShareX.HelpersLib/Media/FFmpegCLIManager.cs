@@ -33,6 +33,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using ShareX.Linux.Desktop;
 
 namespace ShareX.HelpersLib
 {
@@ -86,11 +87,6 @@ namespace ShareX.HelpersLib
 
         protected bool Run(string path, string args)
         {
-            if (!string.Equals(Path.GetExtension(path), ".exe", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
             StopRequested = false;
             int errorCode = Open(path, args);
             IsEncoding = false;
@@ -226,54 +222,22 @@ namespace ShareX.HelpersLib
             return videoInfo;
         }
 
-        public DirectShowDevices GetDirectShowDevices()
+        /// <summary>
+        /// Lists the capture devices the session offers. On Linux these come from PipeWire and
+        /// V4L2 rather than from ffmpeg, which has no device-enumeration API for them.
+        /// </summary>
+        public static MediaCaptureDeviceList GetCaptureDevices()
         {
-            DirectShowDevices devices = new DirectShowDevices();
+            MediaCaptureDeviceList devices = new MediaCaptureDeviceList();
 
-            Run("-list_devices true -f dshow -i dummy");
-
-            string output = Output.ToString();
-            string[] lines = output.Lines();
-            bool isAudio = false;
-            Regex regex = new Regex(@"\[(?:dshow|in#0) @ \w+\] +""(.+)""", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-            foreach (string line in lines)
+            foreach (MediaCaptureDevice device in MediaCaptureDevices.GetAudioSources())
             {
-                if (line.Contains("] DirectShow video devices"))
-                {
-                    isAudio = false;
-                    continue;
-                }
-                else if (line.Contains("] DirectShow audio devices"))
-                {
-                    isAudio = true;
-                    continue;
-                }
+                devices.AudioDevices.Add(device);
+            }
 
-                Match match = regex.Match(line);
-
-                if (match.Success)
-                {
-                    if (line.EndsWith("\" (video)"))
-                    {
-                        isAudio = false;
-                    }
-                    else if (line.EndsWith("\" (audio)"))
-                    {
-                        isAudio = true;
-                    }
-
-                    string deviceName = match.Groups[1].Value;
-
-                    if (isAudio)
-                    {
-                        devices.AudioDevices.Add(deviceName);
-                    }
-                    else
-                    {
-                        devices.VideoDevices.Add(deviceName);
-                    }
-                }
+            foreach (MediaCaptureDevice device in MediaCaptureDevices.GetVideoSources())
+            {
+                devices.VideoDevices.Add(device);
             }
 
             return devices;

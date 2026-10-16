@@ -26,6 +26,7 @@
 using System;
 using System.Drawing;
 using System.Linq;
+using ShareX.Linux.Capture;
 
 namespace ShareX.HelpersLib
 {
@@ -88,58 +89,33 @@ namespace ShareX.HelpersLib
             return new Rectangle(ClientToScreen(r.Location), r.Size);
         }
 
+        /// <summary>
+        /// The pointer position, as last seen by a ShareX window. Wayland does not let a client
+        /// poll the global pointer, so this is a best effort - see <see cref="PointerPositionTracker"/>.
+        /// </summary>
         public static Point GetCursorPosition()
         {
-            if (NativeMethods.GetCursorPos(out POINT point))
-            {
-                return (Point)point;
-            }
-
-            return Point.Empty;
+            return PointerPositionTracker.Current;
         }
 
+        /// <summary>
+        /// Warping the pointer is not something a Wayland client may do, so this does nothing.
+        /// </summary>
         public static void SetCursorPosition(int x, int y)
         {
-            NativeMethods.SetCursorPos(x, y);
         }
 
         public static void SetCursorPosition(Point position)
         {
-            SetCursorPosition(position.X, position.Y);
         }
 
+        /// <summary>
+        /// Asks the compositor to let the user pick a colour from the screen. Returns
+        /// <see cref="Color.Empty"/> when the user cancels.
+        /// </summary>
         public static Color GetPixelColor()
         {
-            return GetPixelColor(GetCursorPosition());
-        }
-
-        public static Color GetPixelColor(int x, int y)
-        {
-            IntPtr hdc = NativeMethods.GetDC(IntPtr.Zero);
-            uint pixel = NativeMethods.GetPixel(hdc, x, y);
-            NativeMethods.ReleaseDC(IntPtr.Zero, hdc);
-            return Color.FromArgb((int)(pixel & 0x000000FF), (int)(pixel & 0x0000FF00) >> 8, (int)(pixel & 0x00FF0000) >> 16);
-        }
-
-        public static Color GetPixelColor(Point position)
-        {
-            return GetPixelColor(position.X, position.Y);
-        }
-
-        public static bool CheckPixelColor(int x, int y, Color color)
-        {
-            Color targetColor = GetPixelColor(x, y);
-
-            return targetColor.R == color.R && targetColor.G == color.G && targetColor.B == color.B;
-        }
-
-        public static bool CheckPixelColor(int x, int y, Color color, byte variation)
-        {
-            Color targetColor = GetPixelColor(x, y);
-
-            return targetColor.R.IsBetween((byte)(color.R - variation), (byte)(color.R + variation)) &&
-                targetColor.G.IsBetween((byte)(color.G - variation), (byte)(color.G + variation)) &&
-                targetColor.B.IsBetween((byte)(color.B - variation), (byte)(color.B + variation));
+            return WaylandScreenCapture.PickColor() ?? Color.Empty;
         }
 
         public static Rectangle CreateRectangle(int x, int y, int x2, int y2)
@@ -287,58 +263,17 @@ namespace ShareX.HelpersLib
             return CreateRectangle(posOnClick, newPosition);
         }
 
-        public static Rectangle GetWindowRectangle(IntPtr handle)
-        {
-            Rectangle rect = Rectangle.Empty;
-
-            if (NativeMethods.IsDWMEnabled() && NativeMethods.GetExtendedFrameBounds(handle, out Rectangle tempRect))
-            {
-                rect = tempRect;
-            }
-
-            if (rect.IsEmpty)
-            {
-                rect = NativeMethods.GetWindowRect(handle);
-            }
-
-            if (!Helpers.IsWindows10OrGreater() && NativeMethods.IsZoomed(handle))
-            {
-                rect = NativeMethods.MaximizedWindowFix(handle, rect);
-            }
-
-            return rect;
-        }
-
-        public static Rectangle GetActiveWindowRectangle()
-        {
-            IntPtr handle = NativeMethods.GetForegroundWindow();
-            return GetWindowRectangle(handle);
-        }
-
-        public static Rectangle GetActiveWindowClientRectangle()
-        {
-            IntPtr handle = NativeMethods.GetForegroundWindow();
-            return NativeMethods.GetClientRect(handle);
-        }
-
+        /// <summary>
+        /// Whether the focused window covers its whole monitor, used to hold back notifications
+        /// during games and presentations.
+        /// </summary>
+        /// <remarks>
+        /// A Wayland client cannot inspect other applications' windows, so ShareX cannot tell.
+        /// Reporting false means notifications are never silently swallowed; users who want them
+        /// held back can rely on their desktop's own do-not-disturb mode instead.
+        /// </remarks>
         public static bool IsActiveWindowFullscreen()
         {
-            IntPtr handle = NativeMethods.GetForegroundWindow();
-
-            if (handle.ToInt32() > 0)
-            {
-                WindowInfo windowInfo = new WindowInfo(handle);
-                string className = windowInfo.ClassName;
-                string[] ignoreList = new string[] { "Progman", "WorkerW" };
-
-                if (ignoreList.All(ignore => !className.Equals(ignore, StringComparison.OrdinalIgnoreCase)))
-                {
-                    Rectangle windowRectangle = windowInfo.Rectangle;
-                    Rectangle monitorRectangle = DesktopScreen.FromRectangle(windowRectangle).Bounds;
-                    return windowRectangle.Contains(monitorRectangle);
-                }
-            }
-
             return false;
         }
 

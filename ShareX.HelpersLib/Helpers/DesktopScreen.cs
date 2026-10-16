@@ -63,6 +63,9 @@ public sealed class DesktopScreen
         return screen == null ? null : new DesktopScreen(screen);
     });
 
-    public static DesktopScreen FromHandle(IntPtr handle) =>
-        OperatingSystem.IsWindows() ? FromRectangle(NativeMethods.GetWindowRect(handle)) : PrimaryScreen;
+    /// <summary>
+    /// The screen a window sits on. Wayland does not let a client look up another window's
+    /// geometry, so this reports the primary screen.
+    /// </summary>
+    public static DesktopScreen FromHandle(IntPtr handle) => PrimaryScreen;
 }

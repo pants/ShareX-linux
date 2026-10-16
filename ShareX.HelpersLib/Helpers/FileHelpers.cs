@@ -35,6 +35,8 @@ using MessageBox = ShareX.AvaloniaUI.MessageBox;
 using MessageBoxButtons = ShareX.AvaloniaUI.MessageBoxButtons;
 using MessageBoxIcon = ShareX.AvaloniaUI.MessageBoxIcon;
 
+using ShareX.Linux.Desktop;
+
 namespace ShareX.HelpersLib
 {
     public static class FileHelpers
@@ -334,7 +336,7 @@ namespace ShareX.HelpersLib
             {
                 try
                 {
-                    NativeMethods.OpenFolderAndSelectFile(filePath);
+                    ShellIntegration.ShowFileInManager(filePath);
 
                     DebugHelper.WriteLine("Folder opened with file: " + filePath);
 

@@ -1,4 +1,4 @@
-﻿#region License Information (GPL v3)
+#region License Information (GPL v3)
 
 /*
     ShareX - A program that allows you to take screenshots and share any file type
@@ -24,56 +24,46 @@
 #endregion License Information (GPL v3)
 
 using System;
-using System.Security.Cryptography;
 using System.Text;
+using ShareX.Linux.Desktop;
 
 namespace ShareX.HelpersLib
 {
-    // https://en.wikipedia.org/wiki/Data_Protection_API
+    /// <summary>
+    /// Keeps stored credentials out of plain text in the settings files. Historically this wrapped
+    /// the Windows Data Protection API; on Linux it is backed by <see cref="DataProtection"/>.
+    /// </summary>
     public static class DPAPI
     {
-        public static string Encrypt(string stringToEncrypt, string optionalEntropy = null, DataProtectionScope scope = DataProtectionScope.CurrentUser)
+        public static string Encrypt(string stringToEncrypt, string optionalEntropy = null)
         {
             byte[] data = Encoding.UTF8.GetBytes(stringToEncrypt);
-            return Encrypt(data, optionalEntropy, scope);
+            return Encrypt(data, optionalEntropy);
         }
 
-        public static string Encrypt(byte[] data, string optionalEntropy = null, DataProtectionScope scope = DataProtectionScope.CurrentUser)
+        public static string Encrypt(byte[] data, string optionalEntropy = null)
         {
-            byte[] entropyData = null;
-            if (optionalEntropy != null)
-            {
-                entropyData = Encoding.UTF8.GetBytes(optionalEntropy);
-            }
-            return Encrypt(data, entropyData, scope);
+            return Encrypt(data, optionalEntropy == null ? null : Encoding.UTF8.GetBytes(optionalEntropy));
         }
 
-        public static string Encrypt(byte[] data, byte[] optionalEntropy = null, DataProtectionScope scope = DataProtectionScope.CurrentUser)
+        public static string Encrypt(byte[] data, byte[] optionalEntropy)
         {
-            byte[] encryptedData = ProtectedData.Protect(data, optionalEntropy, scope);
-            return Convert.ToBase64String(encryptedData);
+            return Convert.ToBase64String(DataProtection.Protect(data, optionalEntropy));
         }
 
-        public static string Decrypt(string encryptedString, string optionalEntropy = null, DataProtectionScope scope = DataProtectionScope.CurrentUser)
+        public static string Decrypt(string encryptedString, string optionalEntropy = null)
         {
-            byte[] encryptedData = Convert.FromBase64String(encryptedString);
-            return Decrypt(encryptedData, optionalEntropy, scope);
+            return Decrypt(Convert.FromBase64String(encryptedString), optionalEntropy);
         }
 
-        public static string Decrypt(byte[] encryptedData, string optionalEntropy = null, DataProtectionScope scope = DataProtectionScope.CurrentUser)
+        public static string Decrypt(byte[] encryptedData, string optionalEntropy = null)
         {
-            byte[] entropyData = null;
-            if (optionalEntropy != null)
-            {
-                entropyData = Encoding.UTF8.GetBytes(optionalEntropy);
-            }
-            return Decrypt(encryptedData, entropyData, scope);
+            return Decrypt(encryptedData, optionalEntropy == null ? null : Encoding.UTF8.GetBytes(optionalEntropy));
         }
 
-        public static string Decrypt(byte[] encryptedData, byte[] optionalEntropy = null, DataProtectionScope scope = DataProtectionScope.CurrentUser)
+        public static string Decrypt(byte[] encryptedData, byte[] optionalEntropy)
         {
-            byte[] decryptedData = ProtectedData.Unprotect(encryptedData, optionalEntropy, scope);
-            return Encoding.UTF8.GetString(decryptedData);
+            return Encoding.UTF8.GetString(DataProtection.Unprotect(encryptedData, optionalEntropy));
         }
     }
 }
