@@ -1,7 +1,7 @@
 <h1 align="center">ShareX for Linux</h1>
-Human written summary:
-This is a ShareX fork that adds support for Linux. It only works on Wayland, and I specifically targeted Hyprland because that's what I use. I removed the "System" features that are present in upstream ShareX as I personally deem them unnecessary on Linux.
 
+## Human written summary:
+This is a ShareX fork that adds support for Linux. It only works on Wayland, and I specifically targeted Hyprland because that's what I use. I removed the "System" features that are present in upstream ShareX as I personally deem them unnecessary on Linux.
 
 Everthing written below is by AI:
 
