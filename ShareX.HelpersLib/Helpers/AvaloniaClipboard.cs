@@ -33,6 +33,8 @@ using System.IO;
 using System.Linq;
 using AvaloniaBitmap = Avalonia.Media.Imaging.Bitmap;
 
+using ShareX.Linux.Desktop;
+
 namespace ShareX.HelpersLib;
 
 internal static class AvaloniaClipboard
@@ -40,19 +42,40 @@ internal static class AvaloniaClipboard
     private static IClipboard Clipboard => DesktopServices.GetWindow().Clipboard ??
         throw new PlatformNotSupportedException("Clipboard access is unavailable.");
 
-    public static bool Clear() => DesktopServices.Run(async () => { await Clipboard.ClearAsync(); return true; });
-    public static string GetText() => DesktopServices.Run(() => Clipboard.TryGetTextAsync());
-    public static bool SetText(string text) => DesktopServices.Run(async () =>
+    /// <summary>
+    /// Whether to go through wl-clipboard rather than the toolkit.
+    /// </summary>
+    /// <remarks>
+    /// ShareX usually has no window open when it copies, and a clipboard owner needs a surface
+    /// to own the selection with and has to stay alive to serve the data. wl-copy forks a
+    /// process that does both. This holds under XWayland too, where its offer is bridged back
+    /// to X11 clients, so the check is for a Wayland display rather than for a toolkit backend.
+    /// </remarks>
+    private static bool UseWaylandTools => WaylandClipboard.IsAvailable;
+
+    public static bool Clear() => UseWaylandTools
+        ? WaylandClipboard.Clear()
+        : DesktopServices.Run(async () => { await Clipboard.ClearAsync(); return true; });
+    public static string GetText() => UseWaylandTools
+        ? WaylandClipboard.GetText()
+        : DesktopServices.Run(() => Clipboard.TryGetTextAsync());
+    public static bool SetText(string text) => UseWaylandTools
+        ? WaylandClipboard.SetText(text)
+        : DesktopServices.Run(async () =>
     {
         await Clipboard.SetTextAsync(text);
         await Clipboard.FlushAsync();
         return true;
     });
 
-    public static string[] GetFiles() => DesktopServices.Run(async () =>
+    public static string[] GetFiles() => UseWaylandTools
+        ? WaylandClipboard.GetFiles().ToArray()
+        : DesktopServices.Run(async () =>
         (await Clipboard.TryGetFilesAsync())?.Select(x => x.TryGetLocalPath()).Where(x => !string.IsNullOrEmpty(x)).ToArray());
 
-    public static bool SetFiles(string[] paths) => DesktopServices.Run(async () =>
+    public static bool SetFiles(string[] paths) => UseWaylandTools
+        ? WaylandClipboard.SetFiles(paths)
+        : DesktopServices.Run(async () =>
     {
         IStorageProvider storage = DesktopServices.GetWindow().StorageProvider;
         List<IStorageItem> files = new();
@@ -68,7 +91,9 @@ internal static class AvaloniaClipboard
         return true;
     });
 
-    public static bool SetImage(byte[] png, byte[] dib, string html) => DesktopServices.Run(async () =>
+    public static bool SetImage(byte[] png, byte[] dib, string html) => UseWaylandTools
+        ? WaylandClipboard.SetImage(png)
+        : DesktopServices.Run(async () =>
     {
         OwnedImageTransfer owned = CreateImageTransfer(png, dib, html);
         try { await Clipboard.SetDataAsync(owned); }
@@ -99,7 +124,15 @@ internal static class AvaloniaClipboard
         catch { ((IDisposable)transfer).Dispose(); bitmap.Dispose(); throw; }
     }
 
-    public static bool Contains(string kind) => DesktopServices.Run(async () =>
+    public static bool Contains(string kind) => UseWaylandTools
+        ? kind switch
+        {
+            ClipboardDataFormats.Text => WaylandClipboard.HasType("text/plain"),
+            ClipboardDataFormats.FileDrop => WaylandClipboard.HasType(WaylandClipboard.UriListType),
+            ClipboardDataFormats.Bitmap => WaylandClipboard.HasImage(),
+            _ => WaylandClipboard.HasType(kind)
+        }
+        : DesktopServices.Run(async () =>
     {
         IReadOnlyList<DataFormat> formats = await Clipboard.GetDataFormatsAsync();
         return kind switch
@@ -112,7 +145,9 @@ internal static class AvaloniaClipboard
         };
     });
 
-    public static byte[] GetImage() => DesktopServices.Run(async () =>
+    public static byte[] GetImage() => UseWaylandTools
+        ? WaylandClipboard.GetImage()
+        : DesktopServices.Run(async () =>
     {
         byte[] png = await Clipboard.TryGetValueAsync(DataFormat.CreateBytesPlatformFormat("image/png"));
         if (png != null) return png;

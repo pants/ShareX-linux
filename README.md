@@ -31,6 +31,7 @@ captures from working.
 | Colour picker | `org.freedesktop.portal.Screenshot.PickColor` |
 | Notifications | `org.freedesktop.portal.Notification`, falling back to `org.freedesktop.Notifications` |
 | Printing | `org.freedesktop.portal.Print`, falling back to CUPS `lp` |
+| Clipboard | `wl-copy` and `wl-paste`, which hold the selection in their own process |
 | Opening files and folders | `org.freedesktop.FileManager1`, the OpenURI portal, then `xdg-open` |
 | Keeping the screen awake while recording | `org.freedesktop.portal.Inhibit` |
 
@@ -44,6 +45,7 @@ elevated access to the display.
 * .NET 10 runtime, unless you build with `--self-contained`
 * `grim` — screen capture on wlroots compositors (Hyprland, sway, river, Wayfire). Without it,
   those compositors fall back to the portal, which often cannot take screenshots there.
+* `wl-clipboard` (`wl-copy`, `wl-paste`) — copying images, text and files to the clipboard
 * `ffmpeg` — screen recording, video conversion, video previews
 * `gst-launch-1.0` with the PipeWire plugin — the screen-recording capture pipeline
   (ships with PipeWire itself)
@@ -170,7 +172,16 @@ take screenshots on GNOME. ShareX works out the real compositor from
 ```
 Compositor: hyprland (XDG_CURRENT_DESKTOP: kde)
 Screen capture: wlr-screencopy (grim)
+Clipboard: wl-clipboard
 ```
+
+### Why the clipboard goes through wl-copy
+
+ShareX spends most of its life as a tray icon with no window open. A clipboard owner needs a
+surface to own the selection with and has to stay alive to serve the data it offered, so a
+toolkit clipboard call from a windowless application reports success and delivers nothing.
+`wl-copy` forks a small process that does both, which is also why a copied image survives ShareX
+exiting. This applies under XWayland too, where its offer is bridged back to X11 clients.
 
 ## Licence
 

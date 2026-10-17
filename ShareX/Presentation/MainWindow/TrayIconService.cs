@@ -168,17 +168,25 @@ internal sealed class DesktopTrayIconService : ITrayIconService
     /// The whole tray menu is cheap to build, and <see cref="RefreshMenu"/> rebuilds it whenever
     /// ShareX refreshes its menus, which is what keeps the recent-task and toggle entries current.
     /// </remarks>
-    private static void BuildNativeMenu(Avalonia.Controls.NativeMenu menu, System.Collections.Generic.IReadOnlyList<MainMenuEntry> entries)
+    private void BuildNativeMenu(Avalonia.Controls.NativeMenu menu, System.Collections.Generic.IReadOnlyList<MainMenuEntry> entries)
     {
         menu.Items.Clear();
         foreach (MainMenuEntry entry in entries)
         {
             if (!entry.IsVisible) continue;
             if (entry.IsSeparator) { menu.Items.Add(new Avalonia.Controls.NativeMenuItemSeparator()); continue; }
-            Avalonia.Controls.NativeMenuItem item = new(entry.Header) { IsEnabled = entry.IsEnabled, IsChecked = entry.IsChecked };
+
+            Avalonia.Controls.NativeMenuItem item = CreateItem(entry);
+
             if (entry.CreateChildren != null)
             {
                 item.Menu = new Avalonia.Controls.NativeMenu();
+
+                // A panel does not send a click for an item that opens a submenu, so an entry
+                // that both toggles something and has children offers the toggle as its first
+                // child instead of silently losing it.
+                if (entry.ExecuteAsync != null) item.Menu.Items.Add(CreateItem(entry));
+
                 BuildNativeMenu(item.Menu, SafeInvoke(entry.CreateChildren));
             }
             else if (entry.CreateCategories != null)
@@ -191,9 +199,52 @@ internal sealed class DesktopTrayIconService : ITrayIconService
                     item.Menu.Items.Add(categoryItem);
                 }
             }
-            else item.Click += async (_, _) => { if (entry.ExecuteAsync != null) await entry.ExecuteAsync(); };
+
             menu.Items.Add(item);
         }
+    }
+
+    /// <summary>
+    /// Builds one native item, carrying over the toggle state so a checkable entry is exported
+    /// as a checkbox rather than as a plain label the user gets no feedback from.
+    /// </summary>
+    private Avalonia.Controls.NativeMenuItem CreateItem(MainMenuEntry entry)
+    {
+        Avalonia.Controls.NativeMenuItem item = new(entry.Header)
+        {
+            IsEnabled = entry.IsEnabled,
+            IsChecked = entry.IsChecked,
+            ToggleType = entry.ToggleType switch
+            {
+                MainMenuToggleType.CheckBox => Avalonia.Controls.MenuItemToggleType.CheckBox,
+                MainMenuToggleType.Radio => Avalonia.Controls.MenuItemToggleType.Radio,
+                _ => Avalonia.Controls.MenuItemToggleType.None
+            }
+        };
+
+        if (entry.ExecuteAsync != null)
+        {
+            item.Click += async (_, _) =>
+            {
+                await entry.ExecuteAsync();
+
+                // The exported menu is a snapshot, so the new state has to be published.
+                // A checkbox is flipped in place, which reaches the panel as a property update
+                // and leaves the open menu alone; a radio item needs its siblings unchecked, so
+                // that case rebuilds.
+                switch (entry.ToggleType)
+                {
+                    case MainMenuToggleType.CheckBox:
+                        item.IsChecked = !item.IsChecked;
+                        break;
+                    case MainMenuToggleType.Radio:
+                        RefreshMenu();
+                        break;
+                }
+            };
+        }
+
+        return item;
     }
 
     /// <summary>One failing submenu builder should not leave the whole tray menu empty.</summary>

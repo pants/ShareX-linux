@@ -85,6 +85,7 @@ internal static class ApplicationDiagnostics
         SoundPlayback.ExceptionLogger = Report;
         PrintingService.ExceptionLogger = Report;
         UpdateSignatureVerifier.ExceptionLogger = Report;
+        WaylandClipboard.ExceptionLogger = Report;
     }
 
     /// <summary>Records how this session will capture the screen, which is the first thing to check.</summary>
@@ -95,6 +96,8 @@ internal static class ApplicationDiagnostics
             string.IsNullOrEmpty(LinuxEnvironment.CompositorName) ? "unknown" : LinuxEnvironment.CompositorName,
             string.IsNullOrEmpty(LinuxEnvironment.DesktopName) ? "unset" : LinuxEnvironment.DesktopName);
         DebugHelper.WriteLine("Screen capture: {0}", WaylandScreenCapture.DescribeBackend());
+        DebugHelper.WriteLine("Clipboard: {0}",
+            WaylandClipboard.IsAvailable ? "wl-clipboard" : "toolkit (" + WaylandClipboard.UnavailableReason + ")");
     }
 
     internal static void WriteStartupFlags()

@@ -24,6 +24,7 @@
 #endregion License Information (GPL v3)
 
 using ShareX.HelpersLib;
+using ShareX.Linux.Desktop;
 using ShareX.Localization;
 using ShareX.UploadersLib;
 using System;
@@ -597,8 +598,15 @@ namespace ShareX
 
             if (Info.TaskSettings.AfterCaptureJob.HasFlag(AfterCaptureTasks.CopyImageToClipboard))
             {
-                ClipboardHelpers.CopyImage(Image, Info.FileName);
-                DebugHelper.WriteLine("Image copied to clipboard.");
+                if (ClipboardHelpers.CopyImage(Image, Info.FileName))
+                {
+                    DebugHelper.WriteLine("Image copied to clipboard.");
+                }
+                else
+                {
+                    DebugHelper.WriteLine("Copying the image to the clipboard failed. " +
+                        WaylandClipboard.UnavailableReason);
+                }
             }
 
             if (Info.TaskSettings.AfterCaptureJob.HasFlag(AfterCaptureTasks.PinToScreen))
