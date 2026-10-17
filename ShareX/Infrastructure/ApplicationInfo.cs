@@ -34,7 +34,15 @@ namespace ShareX;
 internal static class ApplicationInfo
 {
     internal const string Name = "ShareX";
-    internal const string MutexName = "82E6AC09-0FEF-4390-AD9F-0DD3F5561EFC";
+    /// <summary>
+    /// Name of the mutex that makes ShareX single-instance.
+    /// </summary>
+    /// <remarks>
+    /// The "Global\" prefix matters on Linux: without it .NET scopes a named mutex to the
+    /// caller's login session, so ShareX started from a terminal and ShareX started by a
+    /// compositor hotkey would each believe they were the first instance and both run.
+    /// </remarks>
+    internal const string MutexName = @"Global\82E6AC09-0FEF-4390-AD9F-0DD3F5561EFC";
     internal static readonly string PipeName = $"{Environment.MachineName}-{Environment.UserName}-{Name}";
 
     internal const ShareXBuild Build =

@@ -27,6 +27,7 @@
 
 using ShareX.AvaloniaUI.Integration;
 using ShareX.HelpersLib;
+using ShareX.Linux.Ipc;
 using ShareX.ImageEditor.Integration;
 using System;
 using System.Diagnostics;
@@ -42,6 +43,7 @@ namespace ShareX;
 internal static class Program
 {
     private static Stopwatch _startTimer = null!;
+    private static ShareXDBusService? _dbusService;
 
     [STAThread]
     private static void Main(string[] args)
@@ -49,6 +51,13 @@ internal static class Program
         ApplicationDiagnostics.Initialize();
         _startTimer = Stopwatch.StartNew();
         ApplicationCommandLine.Initialize(args);
+
+        // Before anything else is touched: a hotkey asking the running instance to do something
+        // should cost a bus round trip, not a second application start.
+        if (FastTrigger.TryHandle(args))
+        {
+            return;
+        }
 
 #if STEAM
         if (ApplicationCommandLine.TryHandleUninstall())
@@ -117,6 +126,36 @@ internal static class Program
         ApplicationLifecycle.CloseSequence();
     }
 
+    /// <summary>
+    /// Puts ShareX on the session bus so hotkeys can drive this instance instead of starting
+    /// another one. Failing to publish is not fatal; it only means "--trigger" falls back to a
+    /// normal start.
+    /// </summary>
+    private static async Task PublishDBusServiceAsync()
+    {
+        _dbusService = new ShareXDBusService(
+            request => Enum.TryParse(request.Job, ignoreCase: true, out HotkeyType job)
+                ? TaskHelpers.ExecuteJob(ApplicationState.DefaultTaskSettings, job, request.FilePath)
+                : UnknownJobAsync(request.Job),
+            () =>
+            {
+                MainWindowIntegration.Activate();
+                return Task.CompletedTask;
+            },
+            ApplicationInfo.VersionText);
+
+        if (await _dbusService.PublishAsync())
+        {
+            DebugHelper.WriteLine("D-Bus service published: " + ShareXDBus.ServiceName);
+        }
+    }
+
+    private static Task UnknownJobAsync(string job)
+    {
+        DebugHelper.WriteLine($"D-Bus request named an unknown job: \"{job}\".");
+        return Task.CompletedTask;
+    }
+
     private static async Task StartApplicationAsync()
     {
         ImageEditorIntegration.Initialize();
@@ -140,6 +179,8 @@ internal static class Program
             !ApplicationState.Settings.ShowTray;
         MainWindowIntegration.Initialize(hotkeyHost.TrayIconService, showMainWindow);
         SingleInstanceCommandRouter.MarkReady();
+
+        await PublishDBusServiceAsync();
 
 
         if (showMainWindow)
