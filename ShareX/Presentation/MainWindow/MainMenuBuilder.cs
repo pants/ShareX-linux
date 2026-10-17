@@ -27,6 +27,7 @@
 
 using ShareX.AvaloniaUI.Theming;
 using ShareX.HelpersLib;
+using ShareX.Linux.Desktop;
 using ShareX.Localization;
 using ShareX.ScreenCaptureLib;
 using ShareX.UploadersLib;
@@ -124,9 +125,9 @@ internal sealed class MainMenuBuilder
         return new List<MainMenuEntry>
         {
             Item(Strings.MainMenuBuilder_Fullscreen, LucideIcons.maximize, () => new CaptureFullscreen().Capture(autoHide)),
-            // Wayland keeps other applications' windows private, so ShareX cannot list them;
-            // the compositor's own picker asks the user which window to capture.
-            Item(Strings.MainMenuBuilder_Window, LucideIcons.app_window, () => new CaptureWindow().Capture(!_trayMenu)),
+            HyprlandCompositor.IsRunning
+                ? Parent(Strings.MainMenuBuilder_Window, LucideIcons.app_window, BuildWindowMenu)
+                : Item(Strings.MainMenuBuilder_Window, LucideIcons.app_window, () => new CaptureWindow().Capture(!_trayMenu)),
             Parent(Strings.MainMenuBuilder_Monitor, LucideIcons.monitor, BuildMonitorMenu),
             Item(Strings.MainMenuBuilder_Region, LucideIcons.scan, () => new CaptureRegion().Capture(autoHide)),
             Item(Strings.MainMenuBuilder_LastRegion, LucideIcons.layers, () => new CaptureLastRegion().Capture(autoHide)),
@@ -143,6 +144,35 @@ internal sealed class MainMenuBuilder
             Parent(string.Format(Strings.ScreenshotDelay0S, ApplicationState.DefaultTaskSettings.CaptureSettings.ScreenshotDelay.ToString("0.#")),
                 LucideIcons.timer, BuildScreenshotDelayMenu)
         };
+    }
+
+    /// <summary>
+    /// Lists the windows to capture.
+    /// </summary>
+    /// <remarks>
+    /// Wayland keeps other applications' windows private, but a compositor may offer that
+    /// itself, and Hyprland does over its IPC socket. On anything else this menu is not built at
+    /// all and the single "Window" entry hands the choice to the compositor's own picker.
+    /// </remarks>
+    private IReadOnlyList<MainMenuEntry> BuildWindowMenu()
+    {
+        List<MainMenuEntry> items = new();
+
+        foreach (HyprlandWindow window in HyprlandCompositor.GetWindows())
+        {
+            HyprlandWindow target = window;
+            string title = string.IsNullOrEmpty(target.Title) ? target.ClassName : target.Title;
+
+            items.Add(Item(title.Truncate(50, "..."), LucideIcons.app_window,
+                () => new CaptureWindow(target).Capture(!_trayMenu)));
+        }
+
+        if (items.Count == 0)
+        {
+            items.Add(new MainMenuEntry(Strings.MainMenuBuilder_NoWindowsFound, LucideIcons.app_window, isEnabled: false));
+        }
+
+        return items;
     }
 
     private IReadOnlyList<MainMenuEntry> BuildMonitorMenu()

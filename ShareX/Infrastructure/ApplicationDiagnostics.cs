@@ -27,6 +27,10 @@
 
 using Avalonia.Threading;
 using ShareX.HelpersLib;
+using ShareX.Linux.Recording;
+using ShareX.Linux.Desktop;
+using ShareX.Linux.Capture;
+using ShareX.Linux;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -43,6 +47,8 @@ internal static class ApplicationDiagnostics
     internal static void Initialize()
     {
         AssemblyLoadContext.Default.Resolving += ResolveLocalizedAssembly;
+
+        ConnectPlatformLogging();
 
 #if DEBUG
         if (Debugger.IsAttached)
@@ -61,6 +67,34 @@ internal static class ApplicationDiagnostics
         {
             Dispatcher.UIThread.UnhandledException += OnAvaloniaDispatcherException;
         }
+    }
+
+    /// <summary>
+    /// Routes the Linux platform layer's failures into the ShareX log. Without this, a portal
+    /// or capture problem leaves no trace at all, which is exactly the case that needs one.
+    /// </summary>
+    private static void ConnectPlatformLogging()
+    {
+        void Report(Exception exception, string message) => DebugHelper.WriteException(exception, message);
+
+        WaylandScreenCapture.ExceptionLogger = Report;
+        WaylandScreenCapture.DiagnosticLogger = DebugHelper.WriteLine;
+        WaylandRecordingSource.ExceptionLogger = Report;
+        HyprlandCompositor.ExceptionLogger = Report;
+        ShellIntegration.ExceptionLogger = Report;
+        SoundPlayback.ExceptionLogger = Report;
+        PrintingService.ExceptionLogger = Report;
+        UpdateSignatureVerifier.ExceptionLogger = Report;
+    }
+
+    /// <summary>Records how this session will capture the screen, which is the first thing to check.</summary>
+    internal static void WriteCaptureEnvironment()
+    {
+        DebugHelper.WriteLine("Session: {0}", SystemInformation.SessionDescription);
+        DebugHelper.WriteLine("Compositor: {0} (XDG_CURRENT_DESKTOP: {1})",
+            string.IsNullOrEmpty(LinuxEnvironment.CompositorName) ? "unknown" : LinuxEnvironment.CompositorName,
+            string.IsNullOrEmpty(LinuxEnvironment.DesktopName) ? "unset" : LinuxEnvironment.DesktopName);
+        DebugHelper.WriteLine("Screen capture: {0}", WaylandScreenCapture.DescribeBackend());
     }
 
     internal static void WriteStartupFlags()

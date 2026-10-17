@@ -23,6 +23,10 @@
 
 #endregion License Information (GPL v3)
 
+using ShareX.HelpersLib;
+using ShareX.Linux.Capture;
+using ShareX.Linux.Desktop;
+
 namespace ShareX
 {
     /// <summary>
@@ -36,15 +40,46 @@ namespace ShareX
     /// </remarks>
     public class CaptureWindow : CaptureBase
     {
+        /// <summary>A window the compositor already told ShareX about, when one was chosen from a menu.</summary>
+        private readonly HyprlandWindow preselectedWindow;
+
         public CaptureWindow()
         {
+        }
+
+        public CaptureWindow(HyprlandWindow window)
+        {
+            preselectedWindow = window;
         }
 
         protected override TaskMetadata Execute(TaskSettings taskSettings)
         {
             TaskMetadata metadata = CreateMetadata();
 
-            metadata.Image = TaskHelpers.GetScreenshot(taskSettings).CaptureWindowInteractive();
+            if (preselectedWindow != null)
+            {
+                metadata.Image = TaskHelpers.GetScreenshot(taskSettings).CaptureRectangle(preselectedWindow.Bounds);
+                metadata.UpdateInfo(new WindowInfo
+                {
+                    Text = preselectedWindow.Title,
+                    ProcessName = preselectedWindow.ClassName,
+                    Rectangle = preselectedWindow.Bounds
+                });
+
+                return metadata;
+            }
+
+            metadata.Image = TaskHelpers.GetScreenshot(taskSettings).CaptureWindow(out WindowDetails window);
+
+            if (window != null)
+            {
+                metadata.UpdateInfo(new WindowInfo
+                {
+                    Text = window.Title,
+                    ProcessName = window.ClassName,
+                    Rectangle = window.Bounds
+                });
+            }
 
             return metadata;
         }

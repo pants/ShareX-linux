@@ -24,6 +24,7 @@
 #endregion License Information (GPL v3)
 
 using System.Drawing;
+using ShareX.Linux.Desktop;
 using ShareX.Linux.Portals;
 using SkiaSharp;
 
@@ -33,56 +34,92 @@ namespace ShareX.Linux.Capture;
 /// Screen capture for Wayland sessions.
 /// </summary>
 /// <remarks>
-/// A Wayland client cannot read the framebuffer, so every grab goes through
-/// org.freedesktop.portal.Screenshot: the compositor renders the image, writes it to a file and
-/// hands back the URI. The user grants permission once per application. Everything ShareX offers -
-/// a monitor, a saved region, the picker overlay - is a crop of that full-desktop image.
+/// Two ways of getting at the screen exist, and which one works depends on the compositor:
+///
+/// wlroots compositors (Hyprland, sway, river, Wayfire) implement zwlr_screencopy, which a
+/// client may use directly. It is fast and asks the user nothing, because the compositor has
+/// already decided its own clients may capture. ShareX prefers it.
+///
+/// GNOME and KDE do not implement that protocol, and expect xdg-desktop-portal.Screenshot
+/// instead, where the compositor renders the image after asking the user for permission.
+///
+/// The backends are tried in order and a failing one is skipped from then on, so a session
+/// whose portal configuration is broken still captures through the direct path and vice versa.
 /// </remarks>
 public static class WaylandScreenCapture
 {
     private static readonly SemaphoreSlim captureLock = new(1, 1);
+    private static readonly GrimScreenCaptureBackend grim = new();
+    private static readonly PortalScreenCaptureBackend portal = new();
 
-    /// <summary>Set by the host application so capture errors reach the normal ShareX log.</summary>
+    /// <summary>Set by the host application so capture problems reach the normal ShareX log.</summary>
     public static Action<Exception, string>? ExceptionLogger { get; set; }
 
-    /// <summary>Captures the whole desktop across every output.</summary>
-    public static SKBitmap? CaptureDesktop() => Run(CaptureDesktopAsync());
+    /// <summary>Set by the host application so ShareX can report which capture path is in use.</summary>
+    public static Action<string>? DiagnosticLogger { get; set; }
 
     /// <summary>
-    /// Captures through the compositor's own picker, letting the user point at a window or an area.
-    /// This is the only way to capture a specific window on Wayland: clients cannot enumerate or
-    /// address other applications' surfaces.
+    /// The backends in the order they are tried. grim comes first: it needs no permission and
+    /// can crop, so it is both faster and quieter when the compositor supports it.
     /// </summary>
-    public static SKBitmap? CaptureInteractive() => Run(CaptureInteractiveAsync());
+    private static IEnumerable<IScreenCaptureBackend> Backends
+    {
+        get
+        {
+            if (grim.IsAvailable) yield return grim;
+            if (portal.IsAvailable) yield return portal;
+        }
+    }
 
-    /// <summary>Captures the desktop and returns the part of it covered by <paramref name="bounds"/>.</summary>
+    /// <summary>A short description of how ShareX will capture, for the About window and the log.</summary>
+    public static string DescribeBackend() =>
+        Backends.FirstOrDefault()?.Name ?? "no screen capture backend is available";
+
+    /// <summary>Captures the whole desktop across every output.</summary>
+    public static SKBitmap? CaptureDesktop()
+    {
+        captureLock.Wait();
+
+        try
+        {
+            foreach (IScreenCaptureBackend backend in Backends)
+            {
+                SKBitmap? bitmap = backend.CaptureDesktop();
+
+                if (bitmap != null) return bitmap;
+            }
+
+            ReportNoBackend();
+            return null;
+        }
+        finally
+        {
+            captureLock.Release();
+        }
+    }
+
+    /// <summary>Captures the part of the desktop covered by <paramref name="bounds"/>.</summary>
     public static SKBitmap? CaptureRectangle(Rectangle bounds)
     {
         if (bounds.Width <= 0 || bounds.Height <= 0) return null;
 
-        using SKBitmap? desktop = CaptureDesktop();
-
-        return desktop == null ? null : Crop(desktop, bounds, GetDesktopOrigin());
-    }
-
-    public static async Task<SKBitmap?> CaptureDesktopAsync(CancellationToken cancellationToken = default)
-    {
-        await captureLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        captureLock.Wait();
 
         try
         {
-            string path = await new ScreenshotPortal().CaptureAsync(interactive: false, modal: false,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            foreach (IScreenCaptureBackend backend in Backends)
+            {
+                // A backend that can crop for us avoids capturing the whole desktop first.
+                SKBitmap? cropped = backend.CaptureRectangle(bounds);
 
-            return LoadAndDelete(path);
-        }
-        catch (PortalCancelledException)
-        {
-            return null;
-        }
-        catch (Exception exception)
-        {
-            ExceptionLogger?.Invoke(exception, "Capturing the desktop through the screenshot portal failed.");
+                if (cropped != null) return cropped;
+
+                using SKBitmap? desktop = backend.CaptureDesktop();
+
+                if (desktop != null) return Crop(desktop, bounds, GetDesktopOrigin());
+            }
+
+            ReportNoBackend();
             return null;
         }
         finally
@@ -91,33 +128,53 @@ public static class WaylandScreenCapture
         }
     }
 
-    public static async Task<SKBitmap?> CaptureInteractiveAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Captures a single window by asking the compositor which one the user wants.
+    /// </summary>
+    /// <remarks>
+    /// On Hyprland the window's geometry comes from its IPC socket and the pixels from a plain
+    /// region capture, which also recovers the window's title and class for the filename
+    /// patterns. Elsewhere the portal's interactive mode shows the compositor's own picker.
+    /// </remarks>
+    public static SKBitmap? CaptureWindow(out WindowDetails? window)
     {
-        await captureLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        window = null;
+
+        if (HyprlandCompositor.IsRunning)
+        {
+            HyprlandWindow? active = HyprlandCompositor.GetActiveWindow();
+
+            if (active != null)
+            {
+                window = new WindowDetails(active.Title, active.ClassName, active.Bounds);
+
+                SKBitmap? bitmap = CaptureRectangle(active.Bounds);
+
+                if (bitmap != null) return bitmap;
+            }
+        }
+
+        captureLock.Wait();
 
         try
         {
-            string path = await new ScreenshotPortal().CaptureAsync(interactive: true, modal: false,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (portal.IsAvailable)
+            {
+                SKBitmap? bitmap = portal.CaptureInteractive();
 
-            return LoadAndDelete(path);
-        }
-        catch (PortalCancelledException)
-        {
-            return null;
-        }
-        catch (Exception exception)
-        {
-            ExceptionLogger?.Invoke(exception, "The interactive screenshot portal request failed.");
-            return null;
+                if (bitmap != null) return bitmap;
+            }
         }
         finally
         {
             captureLock.Release();
         }
+
+        ReportNoBackend();
+        return null;
     }
 
-    /// <summary>Asks the compositor for a colour anywhere on screen. Returns null when cancelled.</summary>
+    /// <summary>Asks the compositor to let the user pick a colour. Returns null when cancelled.</summary>
     public static Color? PickColor()
     {
         try
@@ -137,7 +194,7 @@ public static class WaylandScreenCapture
     }
 
     /// <summary>
-    /// Crops <paramml name="source"/> to <paramref name="bounds"/>, where bounds are in desktop
+    /// Crops <paramref name="source"/> to <paramref name="bounds"/>, where bounds are in desktop
     /// coordinates and the image's top-left corner sits at <paramref name="origin"/>.
     /// </summary>
     public static SKBitmap? Crop(SKBitmap source, Rectangle bounds, Point origin)
@@ -154,79 +211,43 @@ public static class WaylandScreenCapture
 
     /// <summary>
     /// Top-left corner of the desktop in the compositor's coordinate space. Wayland compositors
-    /// lay outputs out starting at the origin, so this is 0,0; it exists so cropping stays correct
-    /// if a compositor ever reports otherwise.
+    /// lay outputs out starting at the origin, so this is 0,0; it exists so cropping stays
+    /// correct if a compositor ever reports otherwise.
     /// </summary>
     public static Point GetDesktopOrigin() => Point.Empty;
 
-    private static SKBitmap? LoadAndDelete(string path)
+    /// <summary>Decodes a captured image into the layout Skia and Avalonia both want.</summary>
+    internal static SKBitmap? DecodeImage(ReadOnlySpan<byte> encoded)
     {
-        try
-        {
-            using SKCodec codec = SKCodec.Create(path);
+        using SKData data = SKData.CreateCopy(encoded);
+        using SKCodec codec = SKCodec.Create(data);
 
-            if (codec == null) return null;
+        if (codec == null) return null;
 
-            // Decode into a layout the rest of ShareX can hand straight to Skia and Avalonia.
-            SKImageInfo info = codec.Info
-                .WithColorType(SKColorType.Bgra8888)
-                .WithAlphaType(SKAlphaType.Premul);
+        SKImageInfo info = codec.Info
+            .WithColorType(SKColorType.Bgra8888)
+            .WithAlphaType(SKAlphaType.Premul);
 
-            SKBitmap bitmap = new(info);
+        SKBitmap bitmap = new(info);
 
-            return codec.GetPixels(info, bitmap.GetPixels()) is SKCodecResult.Success or SKCodecResult.IncompleteInput
-                ? bitmap
-                : DisposeAndReturnNull(bitmap);
-        }
-        finally
-        {
-            DeleteIfTemporary(path);
-        }
+        return codec.GetPixels(info, bitmap.GetPixels()) is SKCodecResult.Success or SKCodecResult.IncompleteInput
+            ? bitmap
+            : DisposeAndReturnNull(bitmap);
     }
 
-    /// <summary>
-    /// Removes the file the portal produced. The portal hands the image to us and expects the
-    /// application to clean it up, but a user who pointed the portal at their Pictures folder
-    /// wants to keep it, so only transient locations are touched.
-    /// </summary>
-    private static void DeleteIfTemporary(string path)
-    {
-        string[] transientRoots =
-        [
-            Path.GetTempPath(),
-            LinuxEnvironment.RuntimeDir,
-            LinuxEnvironment.CacheHome,
-            "/tmp"
-        ];
-
-        try
-        {
-            string full = Path.GetFullPath(path);
-
-            foreach (string root in transientRoots)
-            {
-                if (!string.IsNullOrEmpty(root) && full.StartsWith(Path.GetFullPath(root), StringComparison.Ordinal))
-                {
-                    File.Delete(full);
-                    return;
-                }
-            }
-        }
-        catch (Exception exception)
-        {
-            ExceptionLogger?.Invoke(exception, $"Removing the temporary screenshot \"{path}\" failed.");
-        }
-    }
+    private static void ReportNoBackend() =>
+        ExceptionLogger?.Invoke(
+            new PlatformNotSupportedException("No screen capture backend succeeded."),
+            "Screen capture failed. Install grim for a wlroots compositor such as Hyprland or sway, " +
+            "or make sure XDG_CURRENT_DESKTOP names your compositor so xdg-desktop-portal picks a " +
+            "backend that can take screenshots.");
 
     private static SKBitmap? DisposeAndReturnNull(SKBitmap bitmap)
     {
         bitmap.Dispose();
         return null;
     }
-
-    /// <summary>
-    /// Blocks on a portal call. Portal work never continues on the UI thread, so this cannot
-    /// deadlock, but it does hold the calling thread while the compositor's dialog is up.
-    /// </summary>
-    internal static T? Run<T>(Task<T?> task) => task.GetAwaiter().GetResult();
 }
+
+/// <summary>What the compositor was able to tell ShareX about a captured window.</summary>
+public sealed record WindowDetails(string Title, string ClassName, Rectangle Bounds);

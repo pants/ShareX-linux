@@ -126,7 +126,13 @@ public static class MainWindowIntegration
 
     public static void ShowTrayMenu() => RunOnUiThread(() => _window?.ShowTrayMenu());
 
-    public static void RefreshMenus() => RunOnUiThread(() => _window?.RefreshMenus());
+    public static void RefreshMenus() => RunOnUiThread(() =>
+    {
+        _window?.RefreshMenus();
+
+        // The tray menu is exported to the panel in full, so it only changes when rebuilt here.
+        _trayIconService?.RefreshMenu();
+    });
 
     internal static void SetScreenshotDelay(decimal delay)
     {

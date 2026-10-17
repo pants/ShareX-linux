@@ -40,6 +40,9 @@ internal interface ITrayIconService : IDisposable
     string ToolTipText { get; set; }
 
     void SetIcon(byte[] iconBytes);
+
+    /// <summary>Rebuilds the context menu from the current settings and task list.</summary>
+    void RefreshMenu();
 }
 
 /// <summary>
@@ -83,7 +86,12 @@ internal sealed class DesktopTrayIconService : ITrayIconService
 
         _avaloniaIcon = new Avalonia.Controls.TrayIcon { Menu = new Avalonia.Controls.NativeMenu(), IsVisible = false };
         _avaloniaIcon.Clicked += OnAvaloniaClick;
-        _avaloniaIcon.Menu.Opening += (_, _) => BuildNativeMenu(_avaloniaIcon.Menu, new MainMenuBuilder(true).BuildTrayMenu());
+
+        // The menu has to exist before the panel asks for it. StatusNotifierItem exports the
+        // whole menu over DBusMenu up front and never tells the application that it is about to
+        // open - Avalonia's exporter answers AboutToShow with "no update needed" - so building
+        // the items lazily would leave the panel showing an empty menu.
+        RefreshMenu();
 
         ToolTipText = text;
         SetIcon(icon);
@@ -95,6 +103,13 @@ internal sealed class DesktopTrayIconService : ITrayIconService
     {
         using MemoryStream stream = new(bytes, writable: false);
         _avaloniaIcon.Icon = new Avalonia.Controls.WindowIcon(stream);
+    }
+
+    public void RefreshMenu()
+    {
+        if (_disposed) return;
+
+        BuildNativeMenu(_avaloniaIcon.Menu!, new MainMenuBuilder(true).BuildTrayMenu());
     }
 
     private void OnAvaloniaClick(object? sender, EventArgs e) => OnMouseUp(InputMouseButton.Left);
@@ -144,6 +159,15 @@ internal sealed class DesktopTrayIconService : ITrayIconService
         }
     }
 
+    /// <summary>
+    /// Fills a native menu from ShareX's menu model, submenus and all.
+    /// </summary>
+    /// <remarks>
+    /// Every level is built now rather than when it is opened: DBusMenu asks for the layout to
+    /// whatever depth the panel wants and gives no "about to show" callback to fill it in later.
+    /// The whole tray menu is cheap to build, and <see cref="RefreshMenu"/> rebuilds it whenever
+    /// ShareX refreshes its menus, which is what keeps the recent-task and toggle entries current.
+    /// </remarks>
     private static void BuildNativeMenu(Avalonia.Controls.NativeMenu menu, System.Collections.Generic.IReadOnlyList<MainMenuEntry> entries)
     {
         menu.Items.Clear();
@@ -155,24 +179,35 @@ internal sealed class DesktopTrayIconService : ITrayIconService
             if (entry.CreateChildren != null)
             {
                 item.Menu = new Avalonia.Controls.NativeMenu();
-                item.Menu.Opening += (_, _) => BuildNativeMenu(item.Menu, entry.CreateChildren());
+                BuildNativeMenu(item.Menu, SafeInvoke(entry.CreateChildren));
             }
             else if (entry.CreateCategories != null)
             {
                 item.Menu = new Avalonia.Controls.NativeMenu();
-                item.Menu.Opening += (_, _) =>
+                foreach (MainMenuCategory category in SafeInvoke(entry.CreateCategories))
                 {
-                    item.Menu.Items.Clear();
-                    foreach (MainMenuCategory category in entry.CreateCategories())
-                    {
-                        Avalonia.Controls.NativeMenuItem categoryItem = new(category.Header) { Menu = new Avalonia.Controls.NativeMenu() };
-                        BuildNativeMenu(categoryItem.Menu, category.Entries);
-                        item.Menu.Items.Add(categoryItem);
-                    }
-                };
+                    Avalonia.Controls.NativeMenuItem categoryItem = new(category.Header) { Menu = new Avalonia.Controls.NativeMenu() };
+                    BuildNativeMenu(categoryItem.Menu, category.Entries);
+                    item.Menu.Items.Add(categoryItem);
+                }
             }
             else item.Click += async (_, _) => { if (entry.ExecuteAsync != null) await entry.ExecuteAsync(); };
             menu.Items.Add(item);
+        }
+    }
+
+    /// <summary>One failing submenu builder should not leave the whole tray menu empty.</summary>
+    private static System.Collections.Generic.IReadOnlyList<T> SafeInvoke<T>(
+        Func<System.Collections.Generic.IReadOnlyList<T>> build)
+    {
+        try
+        {
+            return build();
+        }
+        catch (Exception exception)
+        {
+            DebugHelper.WriteException(exception, "Building a tray submenu failed.");
+            return [];
         }
     }
 

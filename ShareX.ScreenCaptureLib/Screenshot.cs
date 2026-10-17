@@ -76,13 +76,16 @@ namespace ShareX.ScreenCaptureLib
         }
 
         /// <summary>
-        /// Captures a single window by letting the user point at it in the compositor's own
-        /// picker. Wayland gives clients no way to name or address someone else's window, so the
-        /// choice has to be made outside ShareX.
+        /// Captures a single window, along with whatever the compositor will say about it.
         /// </summary>
-        public Bitmap CaptureWindowInteractive()
+        /// <remarks>
+        /// Wayland gives clients no way to address someone else's window, so the compositor
+        /// decides: Hyprland answers over its IPC socket, and elsewhere the portal shows its own
+        /// window picker. <paramref name="window"/> is null when the compositor says nothing.
+        /// </remarks>
+        public Bitmap CaptureWindow(out WindowDetails window)
         {
-            return WaylandScreenCapture.CaptureInteractive();
+            return WaylandScreenCapture.CaptureWindow(out window);
         }
 
         public Bitmap CaptureActiveMonitor()

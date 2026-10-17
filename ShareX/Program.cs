@@ -101,6 +101,7 @@ internal static class Program
 
         PersonalPathManager.CreateApplicationFolders();
         ApplicationDiagnostics.WriteStartupFlags();
+        ApplicationDiagnostics.WriteCaptureEnvironment();
 
         DebugHelper.WriteLine("Avalonia application initializing.");
         AvaloniaBootstrapper.Initialize(args, StartApplicationAsync, ApplicationLifecycle.OnAvaloniaStopped);

@@ -47,6 +47,28 @@ public static class LinuxEnvironment
         (Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP") ??
          Environment.GetEnvironmentVariable("XDG_SESSION_DESKTOP") ?? "").ToLowerInvariant();
 
+    /// <summary>
+    /// Lower-cased name of the compositor actually running.
+    /// </summary>
+    /// <remarks>
+    /// This is deliberately not <see cref="DesktopName"/>. Users of wlroots compositors often
+    /// set XDG_CURRENT_DESKTOP to GNOME or KDE so that portals and file dialogs behave, which
+    /// leaves that variable describing the look they want rather than the compositor they run.
+    /// XDG_SESSION_DESKTOP keeps the real answer, and the compositor's own environment variable
+    /// is better still.
+    /// </remarks>
+    public static string CompositorName { get; } = ResolveCompositorName();
+
+    private static string ResolveCompositorName()
+    {
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("HYPRLAND_INSTANCE_SIGNATURE"))) return "hyprland";
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SWAYSOCK"))) return "sway";
+
+        string session = (Environment.GetEnvironmentVariable("XDG_SESSION_DESKTOP") ?? "").ToLowerInvariant();
+
+        return string.IsNullOrEmpty(session) ? DesktopName : session;
+    }
+
     public static string ConfigHome => ResolveXdgDirectory("XDG_CONFIG_HOME", ".config");
     public static string DataHome => ResolveXdgDirectory("XDG_DATA_HOME", ".local/share");
     public static string CacheHome => ResolveXdgDirectory("XDG_CACHE_HOME", ".cache");

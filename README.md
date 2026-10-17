@@ -13,10 +13,19 @@ grab a key combination for itself. These are deliberate design decisions in Wayl
 work around, so ShareX asks the compositor instead, through
 [xdg-desktop-portal](https://flatpak.github.io/xdg-desktop-portal/):
 
+ShareX picks a capture path per compositor, and logs which one it chose at start-up:
+
+| Compositor | Screen capture |
+| --- | --- |
+| **wlroots** — Hyprland, sway, river, Wayfire | `zwlr_screencopy` through **grim**. No portal, no permission dialog, and a region is grabbed directly instead of cropped out of the whole desktop. |
+| GNOME, KDE, anything else | `org.freedesktop.portal.Screenshot` — the compositor renders the image and hands back a file, after asking the user. |
+
+If the preferred path fails the other is tried, so a broken portal configuration does not stop
+captures from working.
+
 | What | How |
 | --- | --- |
-| Screenshots | `org.freedesktop.portal.Screenshot` — the compositor renders the image and hands back a file |
-| Window capture | the same portal in interactive mode, where the compositor lets the user point at a window |
+| Window capture | **Hyprland**: geometry and title from its IPC socket, so windows are listed in the menu and `%pn`/`%t` work. Elsewhere: the portal's interactive picker. |
 | Screen recording | `org.freedesktop.portal.ScreenCast` publishes a PipeWire stream, GStreamer reads it, ffmpeg encodes it |
 | Global hotkeys | `org.freedesktop.portal.GlobalShortcuts` — the compositor owns the bindings |
 | Colour picker | `org.freedesktop.portal.Screenshot.PickColor` |
@@ -33,6 +42,8 @@ elevated access to the display.
 * A Wayland session with a working `xdg-desktop-portal` backend (`-kde`, `-gnome`, `-hyprland`,
   `-wlr`, …)
 * .NET 10 runtime, unless you build with `--self-contained`
+* `grim` — screen capture on wlroots compositors (Hyprland, sway, river, Wayfire). Without it,
+  those compositors fall back to the portal, which often cannot take screenshots there.
 * `ffmpeg` — screen recording, video conversion, video previews
 * `gst-launch-1.0` with the PipeWire plugin — the screen-recording capture pipeline
   (ships with PipeWire itself)
@@ -91,8 +102,8 @@ your package manager here, so it no longer prompts on launch.
 | Scrolling capture | Needs synthetic key and scroll events delivered into another application's window |
 | Mouse highlighter | Needs a global pointer hook |
 | "Make active window borderless" / "always on top" | Needs to manipulate another application's window |
-| Preconfigured window capture by title | A client cannot enumerate or name other windows |
-| Window title and process name in filenames (`%pn`, `%t`) | Same reason; these patterns fall back to their defaults |
+| Preconfigured window capture by title | A client cannot enumerate or name other windows (on Hyprland the Capture → Window menu does list them) |
+| Window title and process name in filenames (`%pn`, `%t`) | Same reason — **except on Hyprland**, where its IPC socket supplies both |
 | Hiding desktop icons before a capture | A shell-specific trick with no portable equivalent |
 | Taskbar progress | No freedesktop standard; the tray icon still shows progress |
 | Windows shell context menus, "Send to", Steam integration | Windows-only concepts |
@@ -140,9 +151,26 @@ with the Windows backends.
   on" falls back to the primary screen when ShareX has not seen the pointer.
 * The screen-recording controls float where the compositor puts them rather than framing the
   recorded region, because a client cannot place a window at a desktop coordinate.
-* Whether a screenshot is silent or shows a confirmation each time is up to your portal
-  backend. The KDE and GNOME backends remember the grant; `xdg-desktop-portal-gtk` asks every
-  time.
+* On the portal path, whether a screenshot is silent or asks every time is up to your backend:
+  the KDE and GNOME backends remember the grant, `xdg-desktop-portal-gtk` asks each time. The
+  grim path never asks.
+
+### If screenshots do nothing on a wlroots compositor
+
+Install `grim` — ShareX prefers it and will not touch the portal at all.
+
+The portal path fails silently on Hyprland and sway more often than you would expect, because
+`xdg-desktop-portal` picks its backend from `XDG_CURRENT_DESKTOP`. Setting that to `KDE` or
+`GNOME` — a common trick to get those file dialogs — means `hyprland.portal`
+(`UseIn=wlroots;Hyprland;sway;…`) is never matched, and the GTK backend chosen instead can only
+take screenshots on GNOME. ShareX works out the real compositor from
+`HYPRLAND_INSTANCE_SIGNATURE`, `SWAYSOCK` and `XDG_SESSION_DESKTOP` rather than trusting
+`XDG_CURRENT_DESKTOP`, and records the backend it picked in the start-up log:
+
+```
+Compositor: hyprland (XDG_CURRENT_DESKTOP: kde)
+Screen capture: wlr-screencopy (grim)
+```
 
 ## Licence
 
